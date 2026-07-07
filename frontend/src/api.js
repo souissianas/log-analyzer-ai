@@ -1,0 +1,417 @@
+const API_BASE = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? 'http://localhost:8000' : '/api')
+
+const API_KEY = import.meta.env.VITE_API_KEY || ''
+const REQUEST_TIMEOUT_MS = 300_000   // 5 min — long enough for Ollama on slow hardware
+const SSE_RETRY_DELAY_MS  = 3_000    // wait 3s before reconnecting SSE
+
+function buildHeaders(extra = {}) {
+  const headers = { ...extra }
+  const token = localStorage.getItem('token')
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else if (API_KEY) {
+    headers['X-API-Key'] = API_KEY
+  }
+  return headers
+}
+
+export async function login(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Email ou mot de passe incorrect')
+  }
+  const data = await res.json()
+  localStorage.setItem('token', data.access_token)
+  localStorage.setItem('role', data.role)
+  localStorage.setItem('email', data.email)
+  return data
+}
+
+export async function register(email, password, tenantName, tenantSlug, role = 'viewer') {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      tenant_name: tenantName,
+      tenant_slug: tenantSlug,
+      role,
+    }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de l\'inscription')
+  }
+  const data = await res.json()
+  localStorage.setItem('token', data.access_token)
+  localStorage.setItem('role', data.role)
+  localStorage.setItem('email', data.email)
+  return data
+}
+
+export function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('role')
+  localStorage.removeItem('email')
+}
+
+export async function forgotPassword(email) {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la demande de réinitialisation')
+  }
+  return res.json()
+}
+
+export async function resetPassword(email, code, new_password) {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code, new_password }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la réinitialisation')
+  }
+  return res.json()
+}
+
+export function getCurrentUser() {
+  const token = localStorage.getItem('token')
+  const role = localStorage.getItem('role')
+  const email = localStorage.getItem('email')
+  if (token && role && email) {
+    return { token, role, email }
+  }
+  return null
+}
+
+export async function fetchCurrentUser() {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: buildHeaders()
+  })
+  if (!res.ok) {
+    throw new Error('Impossible de récupérer les informations de l\'utilisateur')
+  }
+  return res.json()
+}
+
+export async function fetchUsers() {
+  const res = await fetch(`${API_BASE}/users`, {
+    headers: buildHeaders()
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la récupération des utilisateurs')
+  }
+  return res.json()
+}
+
+export async function updateUserStatus(userId, status) {
+  const res = await fetch(`${API_BASE}/users/${userId}/status`, {
+    method: 'PATCH',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ status })
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la mise à jour du statut')
+  }
+  return res.json()
+}
+
+export async function updateUserRole(userId, role) {
+  const res = await fetch(`${API_BASE}/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ role })
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la mise à jour du rôle')
+  }
+  return res.json()
+}
+
+export async function deleteUser(userId) {
+  const res = await fetch(`${API_BASE}/users/${userId}`, {
+    method: 'DELETE',
+    headers: buildHeaders()
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Erreur lors de la suppression de l\'utilisateur')
+  }
+  return res.json()
+}
+
+
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: buildHeaders(options.headers),
+    })
+
+    if (response.status === 401) {
+      console.warn('Unauthorized request (401), logging out...')
+      logout()
+      window.location.reload()
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+
+    return response
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Analyse interrompue après 180 secondes (timeout).')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// ── Health ────────────────────────────────────────────────────────────────────
+
+export async function checkHealth() {
+  const res = await fetch(`${API_BASE}/health`)
+  if (!res.ok) throw new Error(`Backend indisponible (${res.status})`)
+  return res.json()
+}
+
+export async function checkReadiness() {
+  const res = await fetch(`${API_BASE}/health/ready`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { ok: false, ...data }
+  }
+  return { ok: true, ...data }
+}
+
+export async function checkOllamaHealth() {
+  const res = await fetchWithTimeout(`${API_BASE}/ollama/health`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `Ollama indisponible (${res.status})`)
+  }
+  return res.json()
+}
+
+// ── Sync analysis (legacy — direct, no queue) ─────────────────────────────────
+
+export async function analyzeFile(file, maxErrors = 5) {
+  const form = new FormData()
+  form.append('file', file, file.name)
+
+  const res = await fetchWithTimeout(
+    `${API_BASE}/ollama/analyze-file?output_format=json&max_errors=${maxErrors}`,
+    { method: 'POST', body: form },
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`HTTP ${res.status}: ${text}`)
+  }
+
+  return res.json()
+}
+
+// ── Async analysis (Celery + SSE) ─────────────────────────────────────────────
+
+/**
+ * Submit a log file for async analysis.
+ * Returns { job_id, status, filename }.
+ */
+export async function submitAnalysisJob(file, maxErrors = 5) {
+  const form = new FormData()
+  form.append('file', file, file.name)
+
+  const res = await fetchWithTimeout(
+    `${API_BASE}/jobs/analyze?max_errors=${maxErrors}`,
+    { method: 'POST', body: form },
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`HTTP ${res.status}: ${text}`)
+  }
+
+  return res.json()
+}
+
+/**
+ * Open an SSE connection and call onProgress / onDone / onError as events arrive.
+ * Returns a close() function to terminate the stream.
+ *
+ * onProgress({ status, current, total })
+ * onDone({ log_id, result })
+ * onError(message)
+ */
+export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
+  const sseUrl     = `${API_BASE}/jobs/${jobId}/stream`
+  const pollUrl    = `${API_BASE}/jobs/${jobId}`
+  const headers    = API_KEY ? { 'X-API-Key': API_KEY } : {}
+  const controller = new AbortController()
+  let   closed     = false
+
+  // Helper: parse one SSE line and call appropriate callback.
+  // Returns true if the stream should stop.
+  function handlePayload(payload) {
+    if (payload.status === 'done') { onDone?.(payload);                          return true }
+    if (payload.status === 'failed') { onError?.(payload.error || 'Analyse échouée'); return true }
+    if (payload.error  === 'job_not_found') { onError?.('Job introuvable ou expiré'); return true }
+    onProgress?.(payload)
+    return false
+  }
+
+  // Polling fallback — used when SSE fails or is not supported
+  async function pollFallback() {
+    for (let i = 0; i < 120 && !closed; i++) {
+      await new Promise(r => setTimeout(r, 3000))
+      if (closed) return
+      try {
+        const res = await fetch(pollUrl, { headers: buildHeaders(headers), signal: controller.signal })
+        if (!res.ok) continue
+        const data = await res.json()
+        if (handlePayload(data)) return
+      } catch (e) {
+        if (e.name === 'AbortError') return
+      }
+    }
+    onError?.('Timeout — réessayez')
+  }
+
+  // Main SSE reader with automatic reconnect (up to 3 attempts)
+  ;(async () => {
+    let attempts = 0
+    while (!closed && attempts < 3) {
+      attempts++
+      try {
+        const res = await fetch(sseUrl, {
+          headers: buildHeaders(headers),
+          signal: controller.signal,
+        })
+
+        // If backend returns non-200 fall back to polling immediately
+        if (!res.ok) {
+          console.warn(`[SSE] HTTP ${res.status} — switching to polling`)
+          await pollFallback()
+          return
+        }
+
+        const reader  = res.body.getReader()
+        const decoder = new TextDecoder()
+        let   buffer  = ''
+        let   stop    = false
+
+        while (!stop && !closed) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop()
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const payload = JSON.parse(line.slice(6))
+              if (handlePayload(payload)) { stop = true; break }
+            } catch (_) { /* malformed line */ }
+          }
+        }
+
+        if (stop || closed) return   // clean exit
+
+        // Stream ended without a 'done' — reconnect after delay
+        if (!closed) {
+          console.warn(`[SSE] stream ended — reconnecting in ${SSE_RETRY_DELAY_MS}ms (attempt ${attempts}/3)`)
+          await new Promise(r => setTimeout(r, SSE_RETRY_DELAY_MS))
+        }
+
+      } catch (err) {
+        if (err.name === 'AbortError' || closed) return
+        console.warn(`[SSE] network error (attempt ${attempts}/3):`, err.message)
+        if (attempts >= 3) {
+          // SSE completely failed — fall back to REST polling
+          console.warn('[SSE] switching to polling fallback')
+          await pollFallback()
+          return
+        }
+        await new Promise(r => setTimeout(r, SSE_RETRY_DELAY_MS))
+      }
+    }
+  })()
+
+  return { close: () => { closed = true; controller.abort() } }
+}
+
+/**
+ * Fetch the full result for a completed job.
+ */
+export async function getJobResult(jobId) {
+  const res = await fetchWithTimeout(`${API_BASE}/jobs/${jobId}/result`)
+  if (!res.ok) throw new Error(`Résultat introuvable (${res.status})`)
+  return res.json()
+}
+
+// ── History / Logs ─────────────────────────────────────────────────────────────
+
+export async function fetchAnalysisHistory(limit = 20) {
+  const res = await fetchWithTimeout(`${API_BASE}/logs?limit=${limit}`)
+  if (!res.ok) throw new Error(`Impossible de charger l'historique (${res.status})`)
+  return res.json()
+}
+
+export async function fetchAnalysis(logId) {
+  const res = await fetchWithTimeout(`${API_BASE}/logs/${logId}`)
+  if (!res.ok) throw new Error(`Analyse introuvable (${res.status})`)
+  return res.json()
+}
+
+export async function downloadAnalysisPdf(logId) {
+  const res = await fetchWithTimeout(`${API_BASE}/logs/${logId}/export`, {
+    method: 'POST',
+  })
+
+  if (!res.ok) {
+    throw new Error(`Export PDF impossible (${res.status})`)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `analysis_${logId}.pdf`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+export function exportPdfUrl(logId) {
+  return `${API_BASE}/logs/${logId}/export`
+}
+
+export async function fetchDashboardStats() {
+  const res = await fetchWithTimeout(`${API_BASE}/stats/dashboard`)
+  if (!res.ok) throw new Error(`Impossible de charger le dashboard (${res.status})`)
+  return res.json()
+}
+
+export { API_BASE }

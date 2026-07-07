@@ -1,0 +1,254 @@
+services:
+  # ── Core Infrastructure ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: log-analyzer-postgres
+    environment:
+      POSTGRES_USER: loganalyzer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      POSTGRES_DB: loganalyzer
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U loganalyzer" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  redis:
+    image: redis:7-alpine
+    container_name: log-analyzer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  chromadb:
+    image: chromadb/chroma:0.5.5
+    container_name: log-analyzer-chromadb
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /chroma/chroma
+    ports:
+      - "8080:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/v1/heartbeat\", timeout=3)'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    # ── Ollama LLM ─────────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:0.11.5
+    container_name: log-analyzer-ollama
+
+    # Active l'accès au GPU NVIDIA
+    gpus: all
+
+    volumes:
+      - ollama_data:/root/.ollama
+
+    ports:
+      - "11434:11434"
+
+    environment:
+      # Recommandé pour une GTX 1650 Ti 4 Go
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+      OLLAMA_KEEP_ALIVE: 30m
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: log-analyzer-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: [ "/bin/sh", "-c", "ollama pull ${OLLAMA_MODEL:-llama3.2} && ollama pull nomic-embed-text" ]
+    restart: "no"
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: log-analyzer-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://loganalyzer:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/loganalyzer
+      SQLITE_DB_PATH: backend_analysis.db
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      API_KEY: ${API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      REDIS_URL: redis://redis:6379/0
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: 8000
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
+      TWILIO_TO_WHATSAPP: ${TWILIO_TO_WHATSAPP:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+    ports:
+      - "8000:8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: log-analyzer-celery
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://loganalyzer:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/loganalyzer
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      REDIS_URL: redis://redis:6379/0
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: 8000
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
+      TWILIO_TO_WHATSAPP: ${TWILIO_TO_WHATSAPP:-}
+    command: celery -A worker worker --loglevel=info --concurrency=2 -Q analysis
+    restart: unless-stopped
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_KEY: ${API_KEY:-}
+    container_name: log-analyzer-frontend
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── Monitoring stack (docker compose --profile monitoring up) ─────────────
+  prometheus:
+    profiles: [ "monitoring" ]
+    image: prom/prometheus:v2.54.1
+    container_name: log-analyzer-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus-alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - backend
+
+  grafana:
+    profiles: [ "monitoring" ]
+    image: grafana/grafana:11.2.0
+    container_name: log-analyzer-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
+  loki:
+    profiles: [ "monitoring" ]
+    image: grafana/loki:3.1.1
+    container_name: log-analyzer-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/config.yml
+
+  promtail:
+    profiles: [ "monitoring" ]
+    image: grafana/promtail:3.1.1
+    container_name: log-analyzer-promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  jaeger:
+    profiles: [ "monitoring" ]
+    image: jaegertracing/all-in-one:1.60
+    container_name: log-analyzer-jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: memory
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
+  ollama_data:
+  grafana_data:
+  loki_data:

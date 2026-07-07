@@ -1,0 +1,61 @@
+groups:
+  - name: log-analyzer-alerts
+    interval: 60s
+    rules:
+      # ── Ollama ────────────────────────────────────────────────────────────
+      - alert: OllamaDown
+        expr: |
+          absent(ollama_request_duration_seconds_count offset 2m)
+          or (
+            sum(rate(http_requests_total{path="/ollama/health",status="503"}[2m])) > 0
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ollama is unreachable"
+          description: "No successful Ollama response in the last 2 minutes."
+
+      - alert: OllamaHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(ollama_request_duration_seconds_bucket[5m])
+          ) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ollama p95 latency > 90s"
+          description: "95th percentile Ollama response time is {{ $value | humanizeDuration }}."
+
+      # ── API ──────────────────────────────────────────────────────────────
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API error rate > 5%"
+          description: "HTTP 5xx rate is {{ $value | humanizePercentage }}."
+
+      - alert: APIDown
+        expr: up{job="log-analyzer-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend API is down"
+          description: "The log-analyzer-backend Prometheus target is unreachable."
+
+      # ── Business ─────────────────────────────────────────────────────────
+      - alert: NoAnalysesInLastHour
+        expr: increase(log_analysis_total[1h]) == 0
+        for: 60m
+        labels:
+          severity: info
+        annotations:
+          summary: "No analyses submitted in 1 hour"
+          description: "Log analysis counter has not increased in the last hour."

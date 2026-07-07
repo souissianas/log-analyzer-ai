@@ -1,0 +1,74 @@
+{{- if .Values.chromadb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromadb
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: chromadb
+    release: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chromadb-pvc
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.chromadb.storageSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chromadb
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chromadb
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: chromadb
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: chromadb
+          image: "{{ .Values.chromadb.image }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CHROMA_SERVER_HOST
+              value: "0.0.0.0"
+            - name: CHROMA_SERVER_HTTP_PORT
+              value: "8080"
+            - name: IS_PERSISTENT
+              value: "TRUE"
+            - name: PERSIST_DIRECTORY
+              value: "/chroma/chroma"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            {{- toYaml .Values.chromadb.resources | nindent 12 }}
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /chroma/chroma
+      volumes:
+        - name: chroma-data
+          persistentVolumeClaim:
+            claimName: chromadb-pvc
+{{- end }}

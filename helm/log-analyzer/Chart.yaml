@@ -1,0 +1,15 @@
+apiVersion: v2
+name: log-analyzer
+description: "Log Analyzer AI — FastAPI + React + Ollama + PostgreSQL + Redis + ChromaDB"
+type: application
+version: 1.0.0
+appVersion: "2.1.0"
+keywords:
+  - log-analysis
+  - ai
+  - ollama
+  - fastapi
+home: https://github.com/your-org/log-analyzer-ai
+maintainers:
+  - name: Log Analyzer Team
+    email: team@example.com

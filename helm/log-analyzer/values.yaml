@@ -1,0 +1,140 @@
+# Default values for log-analyzer Helm chart.
+
+# ── Global ──────────────────────────────────────────────────────────────────
+replicaCount:
+  backend: 2
+  frontend: 1
+
+namespace: log-analyzer
+
+image:
+  registry: ghcr.io/your-org
+  backend:
+    repository: log-analyzer-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: log-analyzer-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# ── Backend ─────────────────────────────────────────────────────────────────
+backend:
+  port: 8000
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  env:
+    OLLAMA_MODEL: llama3.2
+    CORS_ORIGINS: "http://localhost:3000"
+    OTLP_ENDPOINT: ""
+  # Secrets injected from K8s secret (see templates/secrets.yaml)
+  secretName: log-analyzer-secrets
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Frontend ────────────────────────────────────────────────────────────────
+frontend:
+  port: 80
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+# ── PostgreSQL ───────────────────────────────────────────────────────────────
+postgres:
+  enabled: true
+  image: postgres:15-alpine
+  database: loganalyzer
+  user: loganalyzer
+  storageSize: 10Gi
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+# ── Redis ────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  image: redis:7-alpine
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# ── Ollama ───────────────────────────────────────────────────────────────────
+ollama:
+  enabled: true
+  image: ollama/ollama:latest
+  storageSize: 20Gi
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "4Gi"
+    limits:
+      cpu: "4000m"
+      memory: "8Gi"
+
+# ── ChromaDB ─────────────────────────────────────────────────────────────────
+chromadb:
+  enabled: true
+  image: chromadb/chroma:0.5.5
+  storageSize: 5Gi
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# ── Celery Worker ─────────────────────────────────────────────────────────────
+celery:
+  enabled: true
+  replicas: 2
+  concurrency: 2
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+
+# ── Ingress ──────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  host: log-analyzer.local
+  tls:
+    enabled: false
+    secretName: log-analyzer-tls
+
+# ── Network Policies ─────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+
+# ── Service Accounts ─────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: log-analyzer-sa

@@ -1,0 +1,73 @@
+{{- if .Values.ollama.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 11434
+      targetPort: 11434
+      protocol: TCP
+      name: http
+  selector:
+    app: ollama
+    release: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-pvc
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.ollama.storageSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: ollama
+        release: {{ .Release.Name }}
+    spec:
+      initContainers:
+        - name: pull-models
+          image: "{{ .Values.ollama.image }}"
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && ollama pull nomic-embed-text"]
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      containers:
+        - name: ollama
+          image: "{{ .Values.ollama.image }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 11434
+              name: http
+          resources:
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-data
+          persistentVolumeClaim:
+            claimName: ollama-pvc
+{{- end }}

@@ -1,0 +1,7 @@
+2026-06-18 08:12:01 INFO Apache/2.4.57 (Ubuntu) configured -- resuming normal operations
+2026-06-18 08:12:05 ERROR [client 192.168.1.42] AH01071: Got error 'Primary script unknown' for /var/www/html/admin.php
+2026-06-18 08:12:10 WARNING [client 10.0.0.15] mod_security: Access denied with code 403 (phase 2)
+2026-06-18 08:12:15 ERROR [core:error] [pid 1842] (13)Permission denied: AH00035: access to /var/www/private denied
+2026-06-18 08:12:20 ERROR [ssl:error] [pid 1845] AH02032: Hostname www.example.com provided via SNI does not match certificate CN
+2026-06-18 08:12:25 CRITICAL [mpm_prefork:error] AH00161: server reached MaxRequestWorkers setting, consider raising the MaxRequestWorkers setting
+2026-06-18 08:12:30 ERROR [proxy_http:error] [pid 1850] (70007)The timeout specified has expired: AH01102: error reading status line from remote server 127.0.0.1:8080

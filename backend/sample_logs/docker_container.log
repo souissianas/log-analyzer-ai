@@ -1,0 +1,8 @@
+2026-06-18 09:01:00 INFO Docker daemon started
+2026-06-18 09:01:05 INFO Container nginx-proxy started (id=abc123)
+2026-06-18 09:01:10 ERROR failed to start container: Error response from daemon: driver failed programming external connectivity on endpoint web (port is already allocated)
+2026-06-18 09:01:15 WARNING container health check failed for api-service (unhealthy)
+2026-06-18 09:01:20 ERROR Error response from daemon: No such container: worker-7f3a
+2026-06-18 09:01:25 ERROR failed to register layer: write /var/lib/docker/tmp/GetImageBlob: no space left on device
+2026-06-18 09:01:30 CRITICAL OCI runtime create failed: container_linux.go:380: starting container process caused: exec: "/app/start.sh": permission denied
+2026-06-18 09:01:35 ERROR network bridge not found: network docker_gwbridge not found

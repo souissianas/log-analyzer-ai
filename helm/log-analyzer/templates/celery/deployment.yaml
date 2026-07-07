@@ -1,0 +1,48 @@
+{{- if .Values.celery.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  labels:
+    {{- include "log-analyzer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.celery.replicas }}
+  selector:
+    matchLabels:
+      app: celery-worker
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        release: {{ .Release.Name }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+      containers:
+        - name: celery
+          image: "{{ .Values.image.registry }}/{{ .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
+          imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
+          command: ["celery", "-A", "worker", "worker", "--loglevel=info", "--concurrency={{ .Values.celery.concurrency }}", "-Q", "analysis"]
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.user }}:$(POSTGRES_PASSWORD)@postgres:5432/{{ .Values.postgres.database }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.backend.secretName }}
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama:11434"
+            - name: CHROMADB_HOST
+              value: "chromadb"
+            - name: CHROMADB_PORT
+              value: "8080"
+            - name: OLLAMA_MODEL
+              value: {{ .Values.backend.env.OLLAMA_MODEL | quote }}
+          resources:
+            {{- toYaml .Values.celery.resources | nindent 12 }}
+{{- end }}

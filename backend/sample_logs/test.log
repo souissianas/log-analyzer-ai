@@ -1,0 +1,10 @@
+2026-06-17 09:15:02 INFO Application started successfully
+2026-06-17 09:15:05 DEBUG Loading configuration from config.yaml
+2026-06-17 09:16:10 ERROR Database connection timeout after 30 seconds
+2026-06-17 09:16:12 WARNING Retry attempt 1 failed, retrying in 5s
+2026-06-17 09:17:00 FATAL Out of memory: unable to allocate 512MB buffer
+2026-06-17 09:17:30 INFO User authentication request received
+2026-06-17 09:18:00 EXCEPTION Unhandled NullPointerException in PaymentService.processPayment()
+2026-06-17 09:18:05 ERROR Failed to write to log file: disk full
+2026-06-17 09:19:00 DEBUG Cache invalidated for key user_session_4521
+2026-06-17 09:20:00 WARNING Deprecated API endpoint /v1/users called by client 192.168.1.45

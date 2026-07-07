@@ -1,0 +1,8 @@
+2026-06-18 11:00:00 INFO Starting build #142 for job deploy-backend (branch main)
+2026-06-18 11:00:05 INFO Checking out git https://git.example.com/backend.git
+2026-06-18 11:00:20 ERROR Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin: compile failure
+2026-06-18 11:00:25 WARNING Test failures: 2, skipped: 1, failures: 1
+2026-06-18 11:00:30 ERROR hudson.AbortException: script returned exit code 1
+2026-06-18 11:00:35 ERROR Credentials not found for id 'docker-registry-prod'
+2026-06-18 11:00:40 CRITICAL Build step 'Execute shell' marked build as failure
+2026-06-18 11:00:45 ERROR java.io.IOException: Failed to connect to repository https://git.example.com/backend.git: Connection timed out

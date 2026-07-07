@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+venv312/
+backend_analysis.db
+*.db
+.env
+.env.*
+*.log
+node_modules/
+.pytest_cache/
+test_*.py
+resp_out.txt
+tmp_repro.py
+scripts/manual_checks/

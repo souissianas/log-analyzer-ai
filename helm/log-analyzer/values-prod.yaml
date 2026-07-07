@@ -1,0 +1,19 @@
+# Production overrides for log-analyzer Helm chart.
+
+replicaCount:
+  backend: 3
+  frontend: 2
+
+backend:
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+
+ingress:
+  tls:
+    enabled: true
+    secretName: log-analyzer-prod-tls
