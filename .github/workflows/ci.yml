@@ -81,20 +81,16 @@ jobs:
           pip install coverage pytest pytest-asyncio
 
       - name: Run unit tests (with coverage)
-        working-directory: ./backend
-        env:
-          DATABASE_URL: postgresql://loganalyzer:changeme123@localhost:5432/loganalyzer
-          SQLITE_DB_PATH: /tmp/test_backend.db
-          REDIS_URL: ""
-          CHROMADB_HOST: ""
-        run: |
-          coverage run -m pytest tests/ -v
-          coverage run --append -m unittest \
-            test_ollama_normalization \
-            test_ollama_nested_explanation \
-            test_semaine6_structured_explanations -v
-          coverage xml -o coverage.xml
-          coverage report --show-missing
+  working-directory: ./backend
+  env:
+    DATABASE_URL: postgresql://loganalyzer:changeme123@localhost:5432/loganalyzer
+    SQLITE_DB_PATH: /tmp/test_backend.db
+    REDIS_URL: ""
+    CHROMADB_HOST: ""
+  run: |
+    coverage run -m pytest tests/ -v
+    coverage xml -o coverage.xml
+    coverage report --show-missing
 
       - name: Upload backend coverage
         uses: actions/upload-artifact@v4
