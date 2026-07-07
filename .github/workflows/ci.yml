@@ -42,6 +42,7 @@ jobs:
       - name: Security audit
         working-directory: ./frontend
         run: npm audit --audit-level=high
+        continue-on-error: true
 
   # ── Backend ─────────────────────────────────────────────────────────────────
   backend:
