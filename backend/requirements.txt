@@ -1,29 +1,46 @@
-fastapi==0.115.0
+fastapi==0.116.2
 uvicorn==0.30.6
-python-multipart==0.0.9
+
+python-multipart==0.0.30
+
 pydantic[email]==2.8.2
 email-validator==2.1.1
+
 httpx==0.27.0
+
 fpdf==1.7.2
+
 psycopg2-binary==2.9.10
+
 prometheus-client==0.20.0
+
 alembic==1.13.2
 SQLAlchemy==2.0.32
-# P3.4 — Structured logging
+
+# Structured logging
 python-json-logger==2.0.7
-# P3.3 — OpenTelemetry tracing
+
+# OpenTelemetry tracing
 opentelemetry-sdk==1.25.0
 opentelemetry-instrumentation-fastapi==0.46b0
 opentelemetry-instrumentation-httpx==0.46b0
 opentelemetry-exporter-otlp-proto-grpc==1.25.0
-# P3.2 — Async queue
+
+# Async queue
 celery[redis]==5.4.0
 redis==5.0.8
-# P3.8 — Auth JWT / RBAC
-python-jose[cryptography]==3.3.0
+
+# Auth JWT / RBAC
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
-# P3.1 — RAG ChromaDB
+
+# RAG ChromaDB
 chromadb==0.5.3
-# Tests — extraction de texte PDF pour vérifier le contenu généré (test_pdf_export.py)
+
+# PDF tests
 pypdf==5.9.0
 anyascii==0.3.2
+
+# Security fixes
+protobuf==6.33.5
+starlette==0.47.3
