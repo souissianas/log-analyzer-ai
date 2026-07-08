@@ -254,12 +254,13 @@ class TestAuthRefresh(unittest.TestCase):
         storage.init_db()
         self.client = TestClient(app)
 
-    def _register_active_user(self, email: str) -> None:
+    def _register_active_user(self, email: str) -> dict:
         """Crée un utilisateur admin actif (premier utilisateur du tenant)
         pour obtenir un couple access/refresh token réel."""
         from unittest.mock import patch
 
         _FAKE_HASH = "$2b$12$fakehashforunittestonly123456789"
+
         with patch("routers.auth.get_password_hash", return_value=_FAKE_HASH):
             reg = self.client.post(
                 "/auth/register",
@@ -271,6 +272,7 @@ class TestAuthRefresh(unittest.TestCase):
                     "role": "admin",
                 },
             )
+
         self.assertIn(reg.status_code, (200, 201), msg=reg.text)
         return reg.json()
 

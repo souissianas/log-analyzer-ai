@@ -436,16 +436,19 @@ def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
     if not os.path.exists(sqlite_path):
         return {"migrated": 0, "message": "Aucune base SQLite trouvée."}
 
-    # Assure que la table existe en PostgreSQL
+    # Assure que les tables existent
     init_db()
 
     conn = _get_sqlite_connection(sqlite_path)
     cur = conn.cursor()
-    cur.execute("SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses")
+    cur.execute(
+        "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses"
+    )
     rows = cur.fetchall()
     conn.close()
 
     inserted = 0
+
     for row in rows:
         payload = {
             "filename": row[1],
@@ -455,42 +458,34 @@ def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
             "data": json.loads(row[5]) if row[5] else None,
         }
 
-        if overwrite:
-            query = (
-                "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data) "
-                "VALUES (%s, %s, %s, %s, %s)"
-            )
-            with _get_postgres_connection() as pg_conn:
-                with pg_conn.cursor() as pg_cur:
-                    pg_cur.execute(query, (
+        # TODO: gérer overwrite=True si nécessaire
+        query = (
+            "INSERT INTO analyses "
+            "(filename, created_at, total_errors_found, total_analyzed, data) "
+            "VALUES (%s, %s, %s, %s, %s)"
+        )
+
+        with _get_postgres_connection() as pg_conn:
+            with pg_conn.cursor() as pg_cur:
+                pg_cur.execute(
+                    query,
+                    (
                         payload["filename"],
                         payload["created_at"],
                         payload["total_errors_found"],
                         payload["total_analyzed"],
                         json.dumps(payload["data"], ensure_ascii=False),
-                    ))
-                    pg_conn.commit()
-                    inserted += 1
-        else:
-            # Naive insert sans vérification de doublon
-            query = (
-                "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data) "
-                "VALUES (%s, %s, %s, %s, %s)"
-            )
-            with _get_postgres_connection() as pg_conn:
-                with pg_conn.cursor() as pg_cur:
-                    pg_cur.execute(query, (
-                        payload["filename"],
-                        payload["created_at"],
-                        payload["total_errors_found"],
-                        payload["total_analyzed"],
-                        json.dumps(payload["data"], ensure_ascii=False),
-                    ))
-                    pg_conn.commit()
-                    inserted += 1
+                    ),
+                )
+                pg_conn.commit()
 
-    return {"migrated": inserted, "source_rows": len(rows), "destination": "postgresql"}
+        inserted += 1
 
+    return {
+        "migrated": inserted,
+        "source_rows": len(rows),
+        "destination": "postgresql",
+    }
 
 def get_user_by_email(email: str) -> Optional[Dict]:
     query = "SELECT id, tenant_id, email, role, hashed_password, status FROM users WHERE email = ?"
