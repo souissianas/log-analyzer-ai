@@ -8,6 +8,7 @@ import httpx
 import asyncio
 import json
 import time
+import aiofiles
 from pathlib import Path
 
 
@@ -28,9 +29,9 @@ async def test_analyze_file():
     print(f"\n📁 Fichier à analyser: {log_file.name}")
     print(f"📏 Taille: {log_file.stat().st_size} bytes")
     
-    # Lire le fichier
-    with open(log_file, "rb") as f:
-        content = f.read()
+    # Lire le fichier (async, ne bloque pas l'event loop)
+    async with aiofiles.open(log_file, "rb") as f:
+        content = await f.read()
     
     print(f"✓ Fichier chargé en mémoire")
     print(f"\nℹ️  Le fichier contient {len(content.decode('utf-8').splitlines())} lignes")
@@ -111,10 +112,10 @@ async def test_analyze_file():
             print("✅ TEST TERMINÉ AVEC SUCCÈS!")
             print("=" * 80)
             
-            # Sauvegarder la réponse complète
+            # Sauvegarder la réponse complète (async, ne bloque pas l'event loop)
             output_file = Path("D:\\downloads\\log-analyzer-ai\\backend\\test_results.json")
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            async with aiofiles.open(output_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(data, indent=2, ensure_ascii=False))
             
             print(f"\n💾 Résultats complets sauvegardés dans: {output_file}")
             
