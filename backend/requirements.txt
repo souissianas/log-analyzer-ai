@@ -2148,12 +2148,11 @@ sqlalchemy==2.0.32 \
     --hash=sha256:e567a8793a692451f706b363ccf3c45e056b67d90ead58c3bc9471af5d212202
     # via
     #   -r requirements.in
-    #   alembic \
-    --hash=sha256:481a43b71e24ed8c43b11ea02f5353d77840e01480881b8cb5a26b8cae64a8cb \
-    --hash=sha256:d92ce9f07e4a3caa3ac13a79523bd18e3bc0042bb8ff2d759a8e7dd0e1859875
-    # via
-    #   -r requirements.in
-    #   fastapi
+    #   alembic
+starlette==0.50.0 \
+    --hash=sha256:9e5391843ec9b6e472eed1365a78c8098cfceb7a74bfd4d6b1c0c0095efb3bca \
+    --hash=sha256:a2a17b22203254bcbc2e1f926d2d55f3f9497f769416b3190768befe598fa3ca
+    # via fastapi
 tenacity==9.1.4 \
     --hash=sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55 \
     --hash=sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a
