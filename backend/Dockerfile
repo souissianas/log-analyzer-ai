@@ -1,36 +1,24 @@
 FROM python:3.12-slim
-
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc \
-        g++ \
-        libpq-dev \
-        python3-dev && \
+    apt-get install -y --no-install-recommends gcc g++ libpq-dev python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY . .
 
-COPY main.py .
-COPY worker.py .
-COPY get_logs.py .
-
-COPY core ./core
-COPY routers ./routers
-COPY schemas ./schemas
-COPY services ./services
-
-
-RUN groupadd -r appuser && \
-    useradd -r -g appuser appuser && \
+# SonarCloud: "The 'python' image runs with 'root' as the default user."
+# Create a dedicated non-root user and hand ownership of /app to it.
+# Must happen AFTER `COPY . .` so the copied files are actually owned
+# by the new user (chown after copy, not before).
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -s /bin/false -M appuser && \
     chown -R appuser:appuser /app
 
-USER appuser
+USER 1000
 
 EXPOSE 8000
-
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
