@@ -46,6 +46,9 @@ spec:
         app: ollama
         release: {{ .Release.Name }}
     spec:
+      # SonarCloud: "Bind this resource's automounted service account to
+      # RBAC or disable automounting." Ollama never talks to the K8s API.
+      automountServiceAccountToken: false
       initContainers:
         - name: pull-models
           image: "{{ .Values.ollama.image }}"
