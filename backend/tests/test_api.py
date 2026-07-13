@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 os.environ.pop("DATABASE_URL", None)
-os.environ["SQLITE_DB_PATH"] = tempfile.mktemp(suffix=".db")
+
+# SonarCloud: "'tempfile.mktemp' is insecure. Use 'tempfile.TemporaryFile' instead"
+# mktemp() only returns a *name*, it never creates the file, leaving a race
+# window (TOCTOU) before SQLite opens the path. mkstemp() creates the file
+# atomically; we close the fd immediately since SQLite reopens by path.
+_fd, _SQLITE_TEST_DB_PATH = tempfile.mkstemp(suffix=".db")
+os.close(_fd)
+os.environ["SQLITE_DB_PATH"] = _SQLITE_TEST_DB_PATH
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-for-tests"
 
 from core.config import get_settings  # noqa: E402
