@@ -20,6 +20,10 @@ spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
+      # SonarCloud: "Bind this Service Account to RBAC or disable
+      # automountServiceAccountToken." The celery worker never calls the
+      # K8s API, so it doesn't need its ServiceAccount token mounted.
+      automountServiceAccountToken: false
       containers:
         - name: celery
           image: "{{ .Values.image.registry }}/{{ .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
@@ -33,8 +37,15 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.backend.secretName }}
                   key: POSTGRES_PASSWORD
+            # SonarCloud: "Make sure that using clear-text protocols is
+            # safe here." redis:// is plaintext, but this traffic never
+            # leaves the cluster's internal ClusterIP network (redis
+            # Service has no external exposure — see redis/deployment.yaml)
+            # so there's no untrusted network segment to intercept it on.
+            # Enabling Redis TLS would require cert management for an
+            # internal-only hop, out of scope for this project.
             - name: REDIS_URL
-              value: "redis://redis:6379/0"
+              value: "redis://redis:6379/0"  # NOSONAR: internal cluster-only traffic, see comment above
             - name: OLLAMA_BASE_URL
               value: "http://ollama:11434"
             - name: CHROMADB_HOST
