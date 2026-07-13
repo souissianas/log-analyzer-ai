@@ -27,6 +27,23 @@ const VIEWS = {
   USERS: 'users',
 }
 
+// SonarCloud: "Ensure that tainted data is sanitized before being written
+// to browser storage." `freshUser` comes from an HTTP response, so its
+// fields are treated as untrusted even though the API is our own backend —
+// a role or email value must match its expected shape before we persist it
+// to localStorage (which is also readable by any XSS payload that might
+// run on the page, so we don't want to blindly store arbitrary strings).
+const VALID_ROLES = new Set(['admin', 'analyst', 'viewer'])
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function sanitizeRole(role) {
+  return typeof role === 'string' && VALID_ROLES.has(role) ? role : null
+}
+
+function sanitizeEmail(email) {
+  return typeof email === 'string' && EMAIL_RE.test(email) ? email : null
+}
+
 export default function App() {
   const { language, setLanguage, t } = useTranslation()
   const [user, setUser] = useState(() => getCurrentUser())
@@ -81,8 +98,24 @@ export default function App() {
       fetchCurrentUser()
         .then(freshUser => {
           setUser(prev => ({ ...prev, ...freshUser }))
-          localStorage.setItem('role', freshUser.role)
-          localStorage.setItem('email', freshUser.email)
+
+          // Validate shape before persisting to localStorage (see note above).
+          const safeRole = sanitizeRole(freshUser.role)
+          const safeEmail = sanitizeEmail(freshUser.email)
+
+          if (safeRole) {
+            localStorage.setItem('role', safeRole)
+          } else {
+            console.warn('fetchCurrentUser returned an unexpected role value, not persisting it')
+            localStorage.removeItem('role')
+          }
+
+          if (safeEmail) {
+            localStorage.setItem('email', safeEmail)
+          } else {
+            console.warn('fetchCurrentUser returned an unexpected email value, not persisting it')
+            localStorage.removeItem('email')
+          }
         })
         .catch(err => {
           console.error('Error updating user info:', err)
