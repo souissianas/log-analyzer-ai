@@ -61,6 +61,7 @@ export default function App() {
   })
   const [showAccountModal, setShowAccountModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [lastLogin] = useState(() => {
     const stored = localStorage.getItem('lastLogin')
