@@ -7,7 +7,17 @@ from fastapi.testclient import TestClient
 
 # SQLite en mémoire — pas besoin de PostgreSQL
 os.environ.pop("DATABASE_URL", None)
-os.environ["SQLITE_DB_PATH"] = tempfile.mktemp(suffix=".db")
+
+# SonarCloud: "'tempfile.mktemp' is insecure. Use 'tempfile.TemporaryFile' instead"
+# mktemp() only returns a *name*, it never creates the file — between the
+# call and SQLite actually opening that path, another process (or an
+# attacker) could create/symlink a file at the same path first (race
+# condition / TOCTOU). mkstemp() creates the file atomically and returns
+# an already-open fd, which we close immediately since SQLite will reopen
+# the path itself.
+_fd, _SQLITE_TEST_DB_PATH = tempfile.mkstemp(suffix=".db")
+os.close(_fd)
+os.environ["SQLITE_DB_PATH"] = _SQLITE_TEST_DB_PATH
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-for-tests"
 
 from core.config import get_settings  # noqa: E402
