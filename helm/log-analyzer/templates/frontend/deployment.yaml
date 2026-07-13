@@ -16,6 +16,10 @@ spec:
         app: frontend
         release: {{ .Release.Name }}
     spec:
+      # SonarCloud: "Bind this resource's automounted service account to
+      # RBAC or disable automounting." The frontend (nginx serving static
+      # files) never talks to the K8s API.
+      automountServiceAccountToken: false
       containers:
         - name: frontend
           image: "{{ .Values.image.registry }}/{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
