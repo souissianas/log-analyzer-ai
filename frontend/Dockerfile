@@ -18,7 +18,9 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
-RUN apk update && apk upgrade --no-cache libexpat
+RUN apk update && \
+    apk upgrade --no-cache && \
+    apk add --no-cache libexpat
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 RUN rm /etc/nginx/conf.d/default.conf
