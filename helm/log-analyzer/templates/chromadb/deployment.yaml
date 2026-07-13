@@ -46,6 +46,9 @@ spec:
         app: chromadb
         release: {{ .Release.Name }}
     spec:
+      # SonarCloud: "Bind this resource's automounted service account to
+      # RBAC or disable automounting." ChromaDB never talks to the K8s API.
+      automountServiceAccountToken: false
       containers:
         - name: chromadb
           image: "{{ .Values.chromadb.image }}"
