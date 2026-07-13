@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from core.telemetry import get_tracer
 from core.metrics import OLLAMA_REQUEST_DURATION
+from core.log_sanitize import sanitize_for_log
 tracer = get_tracer("ollama-service")
 
 try:
@@ -125,9 +126,12 @@ async def analyze_with_ollama(
             try:
                 context_docs = await _search_runbooks(log_line, n_results=3)
                 if context_docs:
+                    # SonarCloud: "Change this code to not log user-controlled data" —
+                    # log_line comes straight from the uploaded file / API body,
+                    # so it must go through sanitize_for_log() before logging.
                     logger.info(
                         "RAG context retrieved",
-                        extra={"n_docs": len(context_docs), "query": log_line[:60]},
+                        extra={"n_docs": len(context_docs), "query": sanitize_for_log(log_line[:60])},
                     )
             except Exception as rag_exc:
                 logger.warning("RAG search failed", extra={"error": str(rag_exc)})
@@ -151,10 +155,17 @@ async def analyze_with_ollama(
         try:
             start_time = time.perf_counter()
             async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-                logger.info("Sending to Ollama: %s -> %s...", error_level, log_line[:60])
+                # Same sanitization applied here — this is the line SonarCloud
+                # originally flagged (L154): log_line is user-controlled and was
+                # being interpolated raw into the log message.
+                logger.info(
+                    "Sending to Ollama: %s -> %s...",
+                    sanitize_for_log(error_level),
+                    sanitize_for_log(log_line[:60]),
+                )
                 response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
                 response.raise_for_status()
-            
+
             duration = time.perf_counter() - start_time
             OLLAMA_REQUEST_DURATION.observe(duration)
 
