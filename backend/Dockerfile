@@ -1,24 +1,43 @@
 FROM python:3.12-slim
+
 WORKDIR /app
 
+# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc g++ libpq-dev python3-dev && \
+    apt-get install -y --no-install-recommends \
+        gcc \
+        g++ \
+        libpq-dev \
+        python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy only requirements first (Docker cache)
+COPY requirements.txt .
 
-COPY . .
+# Install Python dependencies
+RUN pip install --no-cache-dir --requirement requirements.txt
 
-# SonarCloud: "The 'python' image runs with 'root' as the default user."
-# Create a dedicated non-root user and hand ownership of /app to it.
-# Must happen AFTER `COPY . .` so the copied files are actually owned
-# by the new user (chown after copy, not before).
-RUN groupadd -g 1000 appuser && \
-    useradd -u 1000 -g appuser -s /bin/false -M appuser && \
+# Copy only application files
+COPY main.py .
+COPY alembic.ini .
+COPY worker.py .
+COPY get_logs.py .
+COPY setup_files.py .
+COPY pytest.ini .
+
+COPY alembic ./alembic
+COPY core ./core
+COPY routers ./routers
+COPY schemas ./schemas
+COPY services ./services
+
+# Create non-root user
+RUN groupadd -r appuser && \
+    useradd -r -g appuser appuser && \
     chown -R appuser:appuser /app
 
-USER 1000
+USER appuser
 
 EXPOSE 8000
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
