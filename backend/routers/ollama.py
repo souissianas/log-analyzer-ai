@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from core.metrics import LOG_ANALYSIS_TOTAL, LOG_ERRORS_DETECTED, OLLAMA_REQUEST_DURATION
 from core.security import get_current_user_or_api_key
+from core.log_sanitize import sanitize_for_log
 from core.upload import decode_upload, read_upload_with_limit, validate_log_extension
 from schemas.analysis import AnalysisResultResponse, AnalyzedErrorItem
 from services.classifier import classify_error
@@ -80,7 +81,15 @@ async def analyze_file_with_ai(
         )
 
     to_analyze = entries[:max_errors]
-    logger.info("%s : %s erreurs, analyse de %s", file.filename, len(entries), len(to_analyze))
+    # SonarCloud: "Change this code to not log user-controlled data" — file.filename
+    # is fully attacker-controlled (comes straight from the multipart upload),
+    # so it must be sanitized before interpolation to prevent log injection.
+    logger.info(
+        "%s : %s erreurs, analyse de %s",
+        sanitize_for_log(file.filename),
+        len(entries),
+        len(to_analyze),
+    )
 
     # Perf : mêmes optimisations que le flux asynchrone (worker.py) —
     # dédup des messages identiques, cache DB, et parallélisme borné.
