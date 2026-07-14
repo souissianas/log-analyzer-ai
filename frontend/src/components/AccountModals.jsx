@@ -10,12 +10,22 @@ export default function AccountModals({
   language,
 }) {
   if (!showAccountModal && !showSettingsModal) return null;
-
   return (
     <>
       {/* ── Mon Compte Modal ─────────────────────────────────────── */}
       {showAccountModal && (
-        <div className="modal-overlay" onClick={() => setShowAccountModal(false)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowAccountModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowAccountModal(false);
+            }
+          }}
+        >
           <div className="shortcuts-modal" onClick={e => e.stopPropagation()} style={{ minWidth: '420px' }}>
             <div className="shortcuts-modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
@@ -49,10 +59,20 @@ export default function AccountModals({
           </div>
         </div>
       )}
-
       {/* ── Paramètres Modal ─────────────────────────────────────── */}
       {showSettingsModal && (
-        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowSettingsModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowSettingsModal(false);
+            }
+          }}
+        >
           <div className="shortcuts-modal" onClick={e => e.stopPropagation()} style={{ minWidth: '420px' }}>
             <div className="shortcuts-modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
