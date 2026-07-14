@@ -99,6 +99,8 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
               }}
               onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
               onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
+              onFocus={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'; }}
+              onBlur={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; }}
             >
               {t('uploaderBtnRemove')}
             </button>
@@ -129,6 +131,8 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
               }}
               onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'; }}
               onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'; }}
+              onFocus={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'; }}
+              onBlur={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'; }}
             >
               {t('uploaderBtnChange')}
             </button>
