@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Log Analyzer AI", version="2.0.0")
 
+# Background tasks created with asyncio.create_task() are only weakly
+# referenced by the event loop — if nothing else holds a reference, the
+# task can be garbage-collected mid-execution and silently cancelled.
+# Keeping a strong reference here (removed via the done-callback once the
+# task finishes) is the pattern recommended by the asyncio docs.
+_background_tasks: set = set()
+
 @app.on_event("startup")
 async def startup_event():
     # Initialise la base de données SQLite locale
@@ -62,7 +69,9 @@ async def startup_event():
         except Exception as exc:
             logger.warning("Ollama pre-warm skipped (Ollama likely not running yet): %s", exc)
 
-    asyncio.create_task(_warm_up_ollama())
+    warm_up_task = asyncio.create_task(_warm_up_ollama())
+    _background_tasks.add(warm_up_task)
+    warm_up_task.add_done_callback(_background_tasks.discard)
 
 # Prometheus Metrics Middleware
 @app.middleware("http")
