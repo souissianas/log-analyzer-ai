@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from core.config import get_settings
 from schemas.health import HealthResponse, ReadinessResponse
@@ -20,7 +21,13 @@ def health_check():
     return HealthResponse(status="ok", version=settings.app_version)
 
 
-@router.get("/health/ready", response_model=ReadinessResponse)
+@router.get(
+    "/health/ready",
+    response_model=ReadinessResponse,
+    responses={
+        503: {"description": "Service dégradé — base de données ou Ollama indisponible"},
+    },
+)
 async def readiness_check():
     db = storage.check_db_health()
     ollama = await check_ollama_health()
@@ -31,16 +38,17 @@ async def readiness_check():
         ollama=ollama,
     )
     if not ready:
-        from fastapi.responses import JSONResponse
-
         return JSONResponse(status_code=503, content=payload.model_dump())
     return payload
 
 
-@router.get("/ollama/health")
+@router.get(
+    "/ollama/health",
+    responses={
+        503: {"description": "Ollama non disponible ou modèle requis introuvable"},
+    },
+)
 async def ollama_health():
-    from fastapi import HTTPException
-
     health = await check_ollama_health()
     if not health["ollama_running"]:
         raise HTTPException(status_code=503, detail="Ollama non disponible. Lance : ollama serve")
