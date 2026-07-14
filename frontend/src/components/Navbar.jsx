@@ -212,7 +212,15 @@ export default function Navbar({
                       <li
                         key={n.id}
                         className={`notif-item ${n.read ? '' : 'unread'}`}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
+                          }
+                        }}
                       >
                         <div className="notif-icon">✅</div>
                         <div className="notif-content">
