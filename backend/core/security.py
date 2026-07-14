@@ -6,6 +6,9 @@ Corrections appliquées :
   1. Court-circuit auth_enabled=False  → plus de 401 en mode dev
   2. hmac.compare_digest()             → protection timing attack sur l'API Key
   3. Avertissement api_key_query       → commentaire sécurité en prod
+  4. Suppression des `async` inutiles  → aucune de ces fonctions n'utilise `await`
+     (code smell SonarQube : "Use asynchronous features in this function
+     or remove the async keyword")
 """
 import hmac
 import logging
@@ -23,7 +26,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 security_bearer = HTTPBearer(auto_error=False)
 
 
-async def get_current_user_or_api_key(
+def get_current_user_or_api_key(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
     api_key: Optional[str] = Security(api_key_header),
     # NOTE sécurité : la clé en query string apparaît dans les logs Nginx/serveur
@@ -88,7 +91,7 @@ async def get_current_user_or_api_key(
     )
 
 
-async def require_api_key(
+def require_api_key(
     api_key: Optional[str] = Security(api_key_header),
     api_key_query: Optional[str] = Query(None, alias="api_key"),
 ) -> Optional[str]:
@@ -114,7 +117,7 @@ def require_role(allowed_roles: List[str]):
         async def list_users(user=Depends(require_role(["admin"]))):
             ...
     """
-    async def dependency(
+    def dependency(
         current_user: dict = Depends(get_current_user_or_api_key),
     ) -> dict:
         role = current_user.get("role")
