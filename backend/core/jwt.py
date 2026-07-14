@@ -1,5 +1,6 @@
 """
 core/jwt.py
+
 Gestion des tokens JWT et hashage des mots de passe.
 
 Corrections appliquées :
@@ -8,6 +9,8 @@ Corrections appliquées :
   2. decode_token() distingue maintenant token expiré vs token invalide
      pour permettre au frontend de proposer un refresh intelligemment.
   3. create_refresh_token() ajouté pour compléter le flow auth.
+  4. Utilisation de logging.exception() dans les blocs except pour capturer
+     automatiquement la stack trace (au lieu de logger.warning/error + str(exc)).
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -43,10 +46,9 @@ except ImportError:
 
 
 # ── Hashage ────────────────────────────────────────────────────────────────
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Vérifie un mot de passe en clair contre son hash bcrypt.
-    
+
     Stratégie : bcrypt direct en priorité (plus fiable avec les nouvelles
     versions de bcrypt), passlib en fallback si bcrypt n'est pas disponible.
     """
@@ -59,22 +61,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
                 else hashed_password
             )
             return _bcrypt_lib.checkpw(plain_password.encode("utf-8"), hashed_bytes)
-        except Exception as exc:
-            logger.warning("bcrypt direct verify failed, trying passlib fallback", extra={"error": str(exc)})
-
+        except Exception:
+            logger.exception("bcrypt direct verify failed, trying passlib fallback")
     # 2. Fallback passlib
     if _USE_PASSLIB and _pwd_context:
         try:
             return _pwd_context.verify(plain_password, hashed_password)
-        except Exception as exc:
-            logger.error("passlib verify failed", extra={"error": str(exc)})
-
+        except Exception:
+            logger.exception("passlib verify failed")
     return False
 
 
 def get_password_hash(password: str) -> str:
     """Hache un mot de passe avec bcrypt.
-    
+
     Stratégie : bcrypt direct en priorité pour cohérence avec verify_password.
     """
     # 1. bcrypt direct en priorité
@@ -83,21 +83,18 @@ def get_password_hash(password: str) -> str:
             return _bcrypt_lib.hashpw(
                 password.encode("utf-8"), _bcrypt_lib.gensalt()
             ).decode("utf-8")
-        except Exception as exc:
-            logger.warning("bcrypt direct hash failed, trying passlib fallback", extra={"error": str(exc)})
-
+        except Exception:
+            logger.exception("bcrypt direct hash failed, trying passlib fallback")
     # 2. Fallback passlib
     if _USE_PASSLIB and _pwd_context:
         try:
             return _pwd_context.hash(password)
-        except Exception as exc:
-            logger.error("passlib hash failed", extra={"error": str(exc)})
-
+        except Exception:
+            logger.exception("passlib hash failed")
     raise RuntimeError("Aucune bibliothèque bcrypt disponible pour hasher le mot de passe")
 
 
 # ── Création de tokens ─────────────────────────────────────────────────────
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Crée un access token JWT (durée de vie courte : 60 min par défaut)."""
     settings = get_settings()
@@ -120,11 +117,9 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
 
 
 # ── Décodage de tokens ─────────────────────────────────────────────────────
-
 # FIX 2 : decode_token retourne maintenant un tuple (payload, error_type)
 # pour distinguer token expiré (→ proposer refresh) vs token invalide (→ re-login forcé).
 # L'ancienne signature `-> Optional[dict]` est conservée via l'alias decode_token_simple.
-
 DecodeError = Literal["expired", "invalid", None]
 
 
@@ -145,11 +140,9 @@ def decode_token_full(token: str) -> Tuple[Optional[Dict[str, Any]], DecodeError
             algorithms=[settings.jwt_algorithm],
         )
         return payload, None
-
     except ExpiredSignatureError:
         logger.info("JWT token expired", extra={"event": "jwt_expired"})
         return None, "expired"
-
     except JWTError as exc:
         logger.warning("JWT decode error", extra={"event": "jwt_invalid", "error": str(exc)})
         return None, "invalid"
