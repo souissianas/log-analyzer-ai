@@ -329,6 +329,16 @@ export async function submitAnalysisJob(file, maxErrors = 5) {
  * onProgress({ status, current, total })
  * onDone({ log_id, result })
  * onError(message)
+ *
+ * The original implementation packed the connect/read/retry/fallback logic
+ * into a single anonymous async IIFE (Cognitive Complexity 37). It's split
+ * below into small, single-purpose functions so each piece stays under the
+ * complexity limit and is easier to reason about independently:
+ *   - parseSseLine   → parse one raw SSE line, or null if malformed
+ *   - processLines   → run parsed lines through handlePayload, stop on match
+ *   - consumeStream  → read the response body chunk by chunk until done/stop
+ *   - attemptSseConnection → one fetch + read attempt (or fall back to polling)
+ *   - runSseWithRetry → retry loop (up to 3 attempts) driving the attempts above
  */
 export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
   const sseUrl     = `${API_BASE}/jobs/${jobId}/stream`
@@ -337,7 +347,7 @@ export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
   const controller = new AbortController()
   let   closed     = false
 
-  // Helper: parse one SSE line and call appropriate callback.
+  // Parse one SSE line and call the appropriate callback.
   // Returns true if the stream should stop.
   function handlePayload(payload) {
     if (payload.status === 'done') { onDone?.(payload);                          return true }
@@ -364,61 +374,81 @@ export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
     onError?.('Timeout — réessayez')
   }
 
-  // Main SSE reader with automatic reconnect (up to 3 attempts)
-  ;(async () => {
+  // Parse a single raw "data: {...}" line. Returns the payload, or null
+  // if the line is malformed (caller just skips it and keeps reading).
+  function parseSseLine(line) {
+    try {
+      return JSON.parse(line.slice(6))
+    } catch {
+      return null
+    }
+  }
+
+  // Run a batch of complete lines through handlePayload.
+  // Returns true if a terminal payload ('done'/'failed'/'job_not_found') was seen.
+  function processLines(lines) {
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const payload = parseSseLine(line)
+      if (payload && handlePayload(payload)) return true
+    }
+    return false
+  }
+
+  // Read the response body chunk by chunk until the stream ends or a
+  // terminal payload stops it. Returns true if it stopped "cleanly"
+  // (terminal payload seen, or the caller closed the connection).
+  async function consumeStream(reader, decoder) {
+    let buffer = ''
+    while (!closed) {
+      const { done, value } = await reader.read()
+      if (done) return false // stream ended without an explicit 'done'/'failed'
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      if (processLines(lines)) return true
+    }
+    return true // closed externally
+  }
+
+  // One connection attempt: fetch the SSE endpoint, then read it.
+  // Falls back to polling immediately on a non-200 response.
+  // Returns true if the caller should stop retrying.
+  async function attemptSseConnection() {
+    const res = await fetch(sseUrl, {
+      headers: buildHeaders(headers),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      console.warn(`[SSE] HTTP ${res.status} — switching to polling`)
+      await pollFallback()
+      return true
+    }
+
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    return consumeStream(reader, decoder)
+  }
+
+  // Retry loop: up to 3 attempts, with a delay between reconnects,
+  // falling back to polling if every attempt fails on a network error.
+  async function runSseWithRetry() {
     let attempts = 0
     while (!closed && attempts < 3) {
       attempts++
       try {
-        const res = await fetch(sseUrl, {
-          headers: buildHeaders(headers),
-          signal: controller.signal,
-        })
+        const stopped = await attemptSseConnection()
+        if (stopped || closed) return
 
-        // If backend returns non-200 fall back to polling immediately
-        if (!res.ok) {
-          console.warn(`[SSE] HTTP ${res.status} — switching to polling`)
-          await pollFallback()
-          return
-        }
-
-        const reader  = res.body.getReader()
-        const decoder = new TextDecoder()
-        let   buffer  = ''
-        let   stop    = false
-
-        while (!stop && !closed) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop()
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
-            try {
-              const payload = JSON.parse(line.slice(6))
-              if (handlePayload(payload)) { stop = true; break }
-            } catch {
-              /* malformed line — ignore and continue reading the stream */
-            }
-          }
-        }
-
-        if (stop || closed) return   // clean exit
-
-        // Stream ended without a 'done' — reconnect after delay
-        if (!closed) {
-          console.warn(`[SSE] stream ended — reconnecting in ${SSE_RETRY_DELAY_MS}ms (attempt ${attempts}/3)`)
-          await new Promise(r => setTimeout(r, SSE_RETRY_DELAY_MS))
-        }
-
+        console.warn(`[SSE] stream ended — reconnecting in ${SSE_RETRY_DELAY_MS}ms (attempt ${attempts}/3)`)
+        await new Promise(r => setTimeout(r, SSE_RETRY_DELAY_MS))
       } catch (err) {
         if (err.name === 'AbortError' || closed) return
         console.warn(`[SSE] network error (attempt ${attempts}/3):`, err.message)
         if (attempts >= 3) {
-          // SSE completely failed — fall back to REST polling
           console.warn('[SSE] switching to polling fallback')
           await pollFallback()
           return
@@ -426,7 +456,9 @@ export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
         await new Promise(r => setTimeout(r, SSE_RETRY_DELAY_MS))
       }
     }
-  })()
+  }
+
+  runSseWithRetry()
 
   return { close: () => { closed = true; controller.abort() } }
 }
