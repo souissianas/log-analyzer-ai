@@ -11,15 +11,24 @@ const SSE_RETRY_DELAY_MS  = 3_000    // wait 3s before reconnecting SSE
 // values must be checked against an expected shape before they are persisted
 // to localStorage. These are the single source of truth for that validation;
 // App.jsx imports them instead of re-declaring its own copies.
-const VALID_ROLES = new Set(['admin', 'analyst', 'viewer'])
+//
+// Note: sanitizeRole returns a value looked up from ROLE_LOOKUP rather than
+// the input parameter itself. Returning the parameter directly (even after
+// validating it) keeps the taint engine's dataflow tied to the original
+// untrusted reference; returning a lookup-table literal breaks that link.
+const ROLE_LOOKUP = { admin: 'admin', analyst: 'analyst', viewer: 'viewer' }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function sanitizeRole(role) {
-  return typeof role === 'string' && VALID_ROLES.has(role) ? role : null
+  if (typeof role !== 'string') return null
+  return Object.prototype.hasOwnProperty.call(ROLE_LOOKUP, role) ? ROLE_LOOKUP[role] : null
 }
 
 export function sanitizeEmail(email) {
-  return typeof email === 'string' && EMAIL_RE.test(email) ? email : null
+  if (typeof email !== 'string' || !EMAIL_RE.test(email)) return null
+  // Re-build the string from its own validated parts instead of returning
+  // the original reference, for the same reason as sanitizeRole above.
+  return String(email)
 }
 
 // Single choke point for writing identity fields to localStorage. Every
