@@ -1,5 +1,6 @@
 """
 routers/jobs.py
+
 Async analysis job endpoints (Celery + Redis + SSE).
 
 POST  /jobs/analyze          — submit file, returns job_id immediately
@@ -22,7 +23,6 @@ from core.security import get_current_user_or_api_key
 from core.upload import decode_upload, read_upload_with_limit, validate_log_extension
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -35,7 +35,14 @@ def _get_celery():
         raise HTTPException(status_code=503, detail=f"Celery worker unavailable: {exc}")
 
 
-@router.post("/analyze", summary="Submit async analysis job")
+@router.post(
+    "/analyze",
+    summary="Submit async analysis job",
+    responses={
+        403: {"description": "Droit insuffisant pour soumettre une analyse"},
+        503: {"description": "Le worker Celery est indisponible"},
+    },
+)
 async def submit_analysis_job(
     file: UploadFile = File(...),
     max_errors: int = 5,
@@ -48,31 +55,39 @@ async def submit_analysis_job(
     """
     if current_user.get("role") not in ("admin", "analyst"):
         raise HTTPException(status_code=403, detail="Droit insuffisant pour soumettre une analyse")
-        
+
     validate_log_extension(file.filename)
     content_bytes = await read_upload_with_limit(file)
     content = decode_upload(content_bytes)
-
     job_id = str(uuid.uuid4())
     # Count lines to give the frontend a total estimate
     line_count = content.count("\n") + 1
     create_job(job_id, filename=file.filename or "upload.log", total=min(line_count, max_errors))
-
     tenant_id = current_user.get("tenant_id")
     user_id = current_user.get("user_id")
-
     task_fn = _get_celery()
     task_fn.apply_async(
         args=[job_id, content, file.filename or "upload.log", max_errors, tenant_id, user_id],
         task_id=job_id,
     )
-
     logger.info("Job submitted", extra={"job_id": job_id, "log_filename": file.filename, "tenant_id": tenant_id})
     return {"job_id": job_id, "status": "pending", "filename": file.filename}
 
 
-@router.get("/{job_id}/status", summary="Poll job status")
-@router.get("/{job_id}", summary="Poll job status (alias)")
+@router.get(
+    "/{job_id}/status",
+    summary="Poll job status",
+    responses={
+        404: {"description": "Job introuvable ou expiré"},
+    },
+)
+@router.get(
+    "/{job_id}",
+    summary="Poll job status (alias)",
+    responses={
+        404: {"description": "Job introuvable ou expiré"},
+    },
+)
 def get_job_status(
     job_id: str,
     current_user: dict = Depends(get_current_user_or_api_key),
@@ -104,21 +119,17 @@ async def stream_job_progress(
       - data: {"status":"done","log_id":42}
       - data: {"status":"failed","error":"..."}
     """
-
     async def event_generator():
         last_current = -1
         poll_interval = 1.0  # seconds between Redis polls
         max_wait = 300        # 5 minutes max stream duration
-
         for _ in range(int(max_wait / poll_interval)):
             job = get_job(job_id)
             if job is None:
                 yield _sse({"error": "job_not_found"})
                 return
-
             status = job.get("status", "pending")
             current = job.get("current", 0)
-
             # Only push an event when something changed
             if current != last_current or status in ("done", "failed"):
                 payload = {
@@ -130,12 +141,9 @@ async def stream_job_progress(
                 }
                 yield _sse(payload)
                 last_current = current
-
             if status in ("done", "failed"):
                 return
-
             await asyncio.sleep(poll_interval)
-
         yield _sse({"status": "timeout", "error": "Stream timeout after 5 minutes"})
 
     return StreamingResponse(
@@ -148,7 +156,14 @@ async def stream_job_progress(
     )
 
 
-@router.get("/{job_id}/result", summary="Get full analysis result")
+@router.get(
+    "/{job_id}/result",
+    summary="Get full analysis result",
+    responses={
+        404: {"description": "Job introuvable ou expiré"},
+        409: {"description": "Job pas encore terminé"},
+    },
+)
 def get_job_result(
     job_id: str,
     current_user: dict = Depends(get_current_user_or_api_key),
