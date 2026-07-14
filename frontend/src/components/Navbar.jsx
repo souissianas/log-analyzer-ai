@@ -1,5 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 
+// Composant extrait pour éviter d'imbriquer onClick -> setNotifications -> map
+// à plus de 4 niveaux de profondeur (code smell SonarCloud corrigé)
+function NotificationItem({ notification, onRead }) {
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onRead(notification.id)
+    }
+  }
+
+  return (
+    <li
+      className={`notif-item ${notification.read ? '' : 'unread'}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onRead(notification.id)}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="notif-icon">✅</div>
+      <div className="notif-content">
+        <span className="notif-text">{notification.text}</span>
+        <span className="notif-time">{notification.time}</span>
+      </div>
+    </li>
+  )
+}
+
 export default function Navbar({
   user,
   activeView,
@@ -52,6 +79,44 @@ export default function Navbar({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Handlers extraits en fonctions nommées du composant (au lieu d'arrow
+  // functions imbriquées inline) pour limiter la profondeur d'imbrication
+  function toggleNotificationRead(id) {
+    setNotifications(prev => prev.map(x => (x.id === id ? { ...x, read: true } : x)))
+  }
+
+  function markAllNotificationsRead() {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }
+
+  function toggleLanguage() {
+    setLanguage(prev => (prev === 'fr' ? 'en' : 'fr'))
+  }
+
+  function toggleDarkMode() {
+    setDarkMode(prev => !prev)
+  }
+
+  function openNotifications() {
+    setShowNotifications(prev => !prev)
+    setShowProfileMenu(false)
+  }
+
+  function openProfileMenu() {
+    setShowProfileMenu(prev => !prev)
+    setShowNotifications(false)
+  }
+
+  function openAccountModal() {
+    setShowAccountModal(true)
+    setShowProfileMenu(false)
+  }
+
+  function openSettingsModal() {
+    setShowSettingsModal(true)
+    setShowProfileMenu(false)
+  }
 
   const navItems = [
     {
@@ -159,7 +224,7 @@ export default function Navbar({
           {/* Language switcher */}
           <button
             className="btn-icon-action btn-lang-toggle"
-            onClick={() => setLanguage(prev => prev === 'fr' ? 'en' : 'fr')}
+            onClick={toggleLanguage}
             title={language === 'fr' ? 'Switch to English' : 'Passer en Français'}
             style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'monospace' }}
           >
@@ -169,7 +234,7 @@ export default function Navbar({
           {/* Theme toggle */}
           <button
             className="btn-icon-action"
-            onClick={() => setDarkMode(prev => !prev)}
+            onClick={toggleDarkMode}
             title={t(darkMode ? 'navLightMode' : 'navDarkMode')}
           >
             {darkMode ? '☀️' : '🌙'}
@@ -179,10 +244,7 @@ export default function Navbar({
           <div className="nav-notif-wrapper" ref={notifRef}>
             <button
               className="btn-icon-action"
-              onClick={() => {
-                setShowNotifications(prev => !prev)
-                setShowProfileMenu(false)
-              }}
+              onClick={openNotifications}
               title={t('navNotifications')}
             >
               <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -199,7 +261,7 @@ export default function Navbar({
                 <div className="notif-header">
                   <span>{t('navNotifications')}</span>
                   {unreadCount > 0 && (
-                    <button className="notif-mark-read" onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}>
+                    <button className="notif-mark-read" onClick={markAllNotificationsRead}>
                       {t('navMarkAllRead')}
                     </button>
                   )}
@@ -209,25 +271,7 @@ export default function Navbar({
                 ) : (
                   <ul className="notif-list">
                     {notifications.map(n => (
-                      <li
-                        key={n.id}
-                        className={`notif-item ${n.read ? '' : 'unread'}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
-                          }
-                        }}
-                      >
-                        <div className="notif-icon">✅</div>
-                        <div className="notif-content">
-                          <span className="notif-text">{n.text}</span>
-                          <span className="notif-time">{n.time}</span>
-                        </div>
-                      </li>
+                      <NotificationItem key={n.id} notification={n} onRead={toggleNotificationRead} />
                     ))}
                   </ul>
                 )}
@@ -241,10 +285,7 @@ export default function Navbar({
           <div className="nav-profile-wrapper" ref={profileMenuRef}>
             <button
               className="user-profile-card"
-              onClick={() => {
-                setShowProfileMenu(prev => !prev)
-                setShowNotifications(false)
-              }}
+              onClick={openProfileMenu}
             >
               <div className="user-avatar">
                 {user.email ? user.email[0].toUpperCase() : 'U'}
@@ -277,11 +318,11 @@ export default function Navbar({
 
                 <div className="profile-dropdown-divider" />
 
-                <button className="profile-dropdown-item" onClick={() => { setShowAccountModal(true); setShowProfileMenu(false); }}>
+                <button className="profile-dropdown-item" onClick={openAccountModal}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                   {t('navMyAccount')}
                 </button>
-                <button className="profile-dropdown-item" onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}>
+                <button className="profile-dropdown-item" onClick={openSettingsModal}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
                   {t('navSettings')}
                 </button>
