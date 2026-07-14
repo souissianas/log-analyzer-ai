@@ -18,7 +18,9 @@ export default function AccountModals({
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setShowAccountModal(false)}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAccountModal(false);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -26,7 +28,7 @@ export default function AccountModals({
             }
           }}
         >
-          <div className="shortcuts-modal" onClick={e => e.stopPropagation()} style={{ minWidth: '420px' }}>
+          <div className="shortcuts-modal" style={{ minWidth: '420px' }}>
             <div className="shortcuts-modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: '20px', height: '20px', color: 'var(--accent)' }}>
@@ -65,7 +67,9 @@ export default function AccountModals({
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setShowSettingsModal(false)}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSettingsModal(false);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -73,7 +77,7 @@ export default function AccountModals({
             }
           }}
         >
-          <div className="shortcuts-modal" onClick={e => e.stopPropagation()} style={{ minWidth: '420px' }}>
+          <div className="shortcuts-modal" style={{ minWidth: '420px' }}>
             <div className="shortcuts-modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: '20px', height: '20px', color: 'var(--accent)' }}>
