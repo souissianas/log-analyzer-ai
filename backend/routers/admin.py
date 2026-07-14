@@ -10,7 +10,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/db", tags=["admin"], dependencies=[Depends(require_api_key)])
 
 
-@router.post("/migrate")
+@router.post(
+    "/migrate",
+    responses={
+        400: {"description": "DATABASE_URL non défini — PostgreSQL n'est pas configuré."},
+        500: {"description": "psycopg2 manquant sur le serveur, ou échec de la migration."},
+    },
+)
 def migrate_database(overwrite: bool = False):
     if not storage.DATABASE_URL:
         raise HTTPException(
