@@ -21,6 +21,9 @@ except ImportError:
 DATABASE_URL = os.environ.get("DATABASE_URL")
 SQLITE_DB_PATH = os.environ.get("SQLITE_DB_PATH", "backend_analysis.db")
 
+# Nom d'attribut de span réutilisé à plusieurs endroits (évite la duplication de littéral)
+DB_ANALYSIS_ID_ATTR = "db.analysis_id"
+
 
 def _is_postgres() -> bool:
     return DATABASE_URL is not None and psycopg2 is not None
@@ -211,7 +214,7 @@ def init_db() -> None:
         _execute(tenants_query)
         _execute(users_query)
     # PostgreSQL schema evolution is handled by Alembic (see alembic/versions/)
-            
+
     for index_query in indexes:
         _execute(index_query)
 
@@ -276,47 +279,13 @@ def _save_analysis_errors(analysis_id: int, analyzed_items: List[Dict], created_
     conn.close()
 
 
-def save_analysis(result: Dict, tenant_id: Optional[int] = None, user_id: Optional[int] = None) -> int:
-    """Sauvegarde le dict de résultat et retourne l'id inséré."""
-    with tracer.start_as_current_span("save_analysis") as span:
-        span.set_attribute("db.filename", result.get("filename", ""))
-        span.set_attribute("db.total_errors", result.get("total_errors_found", 0))
-        if tenant_id:
-            span.set_attribute("db.tenant_id", tenant_id)
-        if user_id:
-            span.set_attribute("db.user_id", user_id)
-        try:
-            created_at = datetime.now(timezone.utc).isoformat()
-            if _is_postgres():
-                query = (
-                    "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data, tenant_id, user_id) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id"
-                )
-                with _get_postgres_connection() as conn:
-                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                        cur.execute(
-                            query,
-                            (
-                                result.get("filename"),
-                                created_at,
-                                result.get("total_errors_found", 0),
-                                result.get("total_analyzed", 0),
-                                json.dumps(result, ensure_ascii=False),
-                                tenant_id,
-                                user_id,
-                            ),
-                        )
-                        row = cur.fetchone()
-                        analysis_id = row["id"]
-                        conn.commit()
-                _save_analysis_errors(analysis_id, result.get("analyzed", []), created_at)
-                span.set_attribute("db.analysis_id", analysis_id)
-                return analysis_id
-            query = (
-                "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data, tenant_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
-            )
-            conn = _get_sqlite_connection()
-            cur = conn.cursor()
+def _insert_analysis_postgres(result: Dict, created_at: str, tenant_id: Optional[int], user_id: Optional[int]) -> int:
+    query = (
+        "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data, tenant_id, user_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id"
+    )
+    with _get_postgres_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 query,
                 (
@@ -329,11 +298,55 @@ def save_analysis(result: Dict, tenant_id: Optional[int] = None, user_id: Option
                     user_id,
                 ),
             )
+            row = cur.fetchone()
+            analysis_id = row["id"]
             conn.commit()
-            analysis_id = cur.lastrowid
-            conn.close()
+    return analysis_id
+
+
+def _insert_analysis_sqlite(result: Dict, created_at: str, tenant_id: Optional[int], user_id: Optional[int]) -> int:
+    query = (
+        "INSERT INTO analyses (filename, created_at, total_errors_found, total_analyzed, data, tenant_id, user_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    conn = _get_sqlite_connection()
+    cur = conn.cursor()
+    cur.execute(
+        query,
+        (
+            result.get("filename"),
+            created_at,
+            result.get("total_errors_found", 0),
+            result.get("total_analyzed", 0),
+            json.dumps(result, ensure_ascii=False),
+            tenant_id,
+            user_id,
+        ),
+    )
+    conn.commit()
+    analysis_id = cur.lastrowid
+    conn.close()
+    return analysis_id
+
+
+def save_analysis(result: Dict, tenant_id: Optional[int] = None, user_id: Optional[int] = None) -> int:
+    """Sauvegarde le dict de résultat et retourne l'id inséré."""
+    with tracer.start_as_current_span("save_analysis") as span:
+        span.set_attribute("db.filename", result.get("filename", ""))
+        span.set_attribute("db.total_errors", result.get("total_errors_found", 0))
+        if tenant_id:
+            span.set_attribute("db.tenant_id", tenant_id)
+        if user_id:
+            span.set_attribute("db.user_id", user_id)
+        try:
+            created_at = datetime.now(timezone.utc).isoformat()
+            if _is_postgres():
+                analysis_id = _insert_analysis_postgres(result, created_at, tenant_id, user_id)
+            else:
+                analysis_id = _insert_analysis_sqlite(result, created_at, tenant_id, user_id)
+
             _save_analysis_errors(analysis_id, result.get("analyzed", []), created_at)
-            span.set_attribute("db.analysis_id", analysis_id)
+            span.set_attribute(DB_ANALYSIS_ID_ATTR, analysis_id)
             return analysis_id
         except Exception as e:
             span.record_exception(e)
@@ -341,46 +354,59 @@ def save_analysis(result: Dict, tenant_id: Optional[int] = None, user_id: Option
             raise
 
 
+def _get_analysis_postgres(analysis_id: int, tenant_id: Optional[int]) -> Optional[Dict]:
+    if tenant_id is not None:
+        query = "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = %s AND tenant_id = %s"
+        params = (analysis_id, tenant_id)
+    else:
+        query = "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = %s"
+        params = (analysis_id,)
+    with _get_postgres_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            row = cur.fetchone()
+            if not row:
+                return None
+            row["data"] = row["data"] if isinstance(row["data"], dict) else json.loads(row["data"])
+            return row
+
+
+def _get_analysis_sqlite(analysis_id: int, tenant_id: Optional[int]) -> Optional[Dict]:
+    conn = _get_sqlite_connection()
+    cur = conn.cursor()
+    if tenant_id is not None:
+        cur.execute(
+            "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = ? AND tenant_id = ?",
+            (analysis_id, tenant_id),
+        )
+    else:
+        cur.execute(
+            "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = ?",
+            (analysis_id,),
+        )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "filename": row[1],
+        "created_at": row[2],
+        "total_errors_found": row[3],
+        "total_analyzed": row[4],
+        "data": row[5] if isinstance(row[5], dict) else (json.loads(row[5]) if row[5] else None),
+    }
+
+
 def get_analysis(analysis_id: int, tenant_id: Optional[int] = None) -> Optional[Dict]:
     with tracer.start_as_current_span("get_analysis") as span:
-        span.set_attribute("db.analysis_id", analysis_id)
+        span.set_attribute(DB_ANALYSIS_ID_ATTR, analysis_id)
         if tenant_id:
             span.set_attribute("db.tenant_id", tenant_id)
         try:
             if _is_postgres():
-                if tenant_id is not None:
-                    query = "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = %s AND tenant_id = %s"
-                    params = (analysis_id, tenant_id)
-                else:
-                    query = "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = %s"
-                    params = (analysis_id,)
-                with _get_postgres_connection() as conn:
-                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                        cur.execute(query, params)
-                        row = cur.fetchone()
-                        if not row:
-                            return None
-                        row["data"] = row["data"] if isinstance(row["data"], dict) else json.loads(row["data"])
-                        return row
-
-            conn = _get_sqlite_connection()
-            cur = conn.cursor()
-            if tenant_id is not None:
-                cur.execute("SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = ? AND tenant_id = ?", (analysis_id, tenant_id))
-            else:
-                cur.execute("SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses WHERE id = ?", (analysis_id,))
-            row = cur.fetchone()
-            conn.close()
-            if not row:
-                return None
-            return {
-                "id": row[0],
-                "filename": row[1],
-                "created_at": row[2],
-                "total_errors_found": row[3],
-                "total_analyzed": row[4],
-                "data": row[5] if isinstance(row[5], dict) else json.loads(row[5]) if row[5] else None,
-            }
+                return _get_analysis_postgres(analysis_id, tenant_id)
+            return _get_analysis_sqlite(analysis_id, tenant_id)
         except Exception as e:
             span.record_exception(e)
             span.set_status(2, str(e))
@@ -424,7 +450,6 @@ def list_analyses(limit: int = 100, offset: int = 0, tenant_id: Optional[int] = 
             "total_analyzed": r[4],
         })
     return results
-
 
 
 def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
@@ -486,6 +511,7 @@ def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
         "source_rows": len(rows),
         "destination": "postgresql",
     }
+
 
 def get_user_by_email(email: str) -> Optional[Dict]:
     query = "SELECT id, tenant_id, email, role, hashed_password, status FROM users WHERE email = ?"
@@ -620,7 +646,7 @@ def get_cached_error_analysis(message: str) -> Optional[Dict]:
     query = "SELECT category, explanation, causes, solutions FROM analysis_errors WHERE message = ? LIMIT 1"
     if _is_postgres():
         query = query.replace("?", "%s")
-    
+
     try:
         rows = _execute(query, (message,), fetch=True)
         if rows:
@@ -650,45 +676,35 @@ def get_cached_error_analysis(message: str) -> Optional[Dict]:
     return None
 
 
-def get_dashboard_stats(tenant_id: Optional[int] = None) -> Dict:
-    """Retourne les statistiques globales pour le dashboard."""
-    ph = "%s" if _is_postgres() else "?"
-    tenant_filter = f" WHERE tenant_id = {ph}" if tenant_id is not None else ""
-    tenant_params = (tenant_id,) if tenant_id is not None else ()
-
-    # ── Totaux ──────────────────────────────────────────────────────
+def _get_dashboard_totals(tenant_filter: str, tenant_params: tuple) -> Dict:
     total_rows = _execute(
         f"SELECT COUNT(*) as n, COALESCE(SUM(total_errors_found),0) as e, COALESCE(SUM(total_analyzed),0) as a FROM analyses{tenant_filter}",
         tenant_params, fetch=True
     )
     totals = dict(total_rows[0]) if total_rows else {}
-    total_analyses  = int(totals.get("n") or 0)
-    total_errors    = int(totals.get("e") or 0)
-    total_analyzed  = int(totals.get("a") or 0)
+    return {
+        "total_analyses": int(totals.get("n") or 0),
+        "total_errors": int(totals.get("e") or 0),
+        "total_analyzed": int(totals.get("a") or 0),
+    }
 
-    # ── Erreurs par niveau (depuis analysis_errors) ──────────────────
-    if _is_postgres():
-        level_query = """
-            SELECT ae.level, COUNT(*) as cnt
-            FROM analysis_errors ae
-            JOIN analyses a ON a.id = ae.analysis_id
-            {where}
-            GROUP BY ae.level
-        """.format(where=f"WHERE a.tenant_id = {ph}" if tenant_id is not None else "")
-    else:
-        level_query = """
-            SELECT ae.level, COUNT(*) as cnt
-            FROM analysis_errors ae
-            JOIN analyses a ON a.id = ae.analysis_id
-            {where}
-            GROUP BY ae.level
-        """.format(where="WHERE a.tenant_id = ?" if tenant_id is not None else "")
 
+def _get_errors_by_level(ph: str, tenant_id: Optional[int], tenant_params: tuple) -> Dict:
+    where_clause = f"WHERE a.tenant_id = {ph}" if tenant_id is not None else ""
+    level_query = """
+        SELECT ae.level, COUNT(*) as cnt
+        FROM analysis_errors ae
+        JOIN analyses a ON a.id = ae.analysis_id
+        {where}
+        GROUP BY ae.level
+    """.format(where=where_clause)
     level_rows = _execute(level_query, tenant_params, fetch=True)
-    errors_by_level = {str(r["level"] or "UNKNOWN").upper(): int(r["cnt"]) for r in (level_rows or [])}
+    return {str(r["level"] or "UNKNOWN").upper(): int(r["cnt"]) for r in (level_rows or [])}
 
-    # ── Analyses par jour (7 derniers jours) ────────────────────────
+
+def _get_analyses_per_day(ph: str, tenant_id: Optional[int], tenant_params: tuple) -> List[Dict]:
     if _is_postgres():
+        where_clause = f"WHERE tenant_id = {ph}" if tenant_id is not None else "WHERE 1=1"
         day_query = """
             SELECT DATE(created_at::TIMESTAMPTZ) as day, COUNT(*) as cnt, COALESCE(SUM(total_errors_found),0) as errors
             FROM analyses
@@ -696,8 +712,9 @@ def get_dashboard_stats(tenant_id: Optional[int] = None) -> Dict:
             AND created_at::TIMESTAMPTZ >= NOW() - INTERVAL '7 days'
             GROUP BY DATE(created_at::TIMESTAMPTZ)
             ORDER BY day ASC
-        """.format(where=f"WHERE tenant_id = {ph}" if tenant_id is not None else "WHERE 1=1")
+        """.format(where=where_clause)
     else:
+        where_clause = "WHERE tenant_id = ?" if tenant_id is not None else "WHERE 1=1"
         day_query = """
             SELECT DATE(created_at) as day, COUNT(*) as cnt, COALESCE(SUM(total_errors_found),0) as errors
             FROM analyses
@@ -705,16 +722,16 @@ def get_dashboard_stats(tenant_id: Optional[int] = None) -> Dict:
             AND created_at >= DATE('now', '-7 days')
             GROUP BY DATE(created_at)
             ORDER BY day ASC
-        """.format(where="WHERE tenant_id = ?" if tenant_id is not None else "WHERE 1=1")
+        """.format(where=where_clause)
 
     day_rows = _execute(day_query, tenant_params, fetch=True)
-    analyses_per_day = [
+    return [
         {"day": str(r["day"]), "count": int(r["cnt"]), "errors": int(r["errors"])}
         for r in (day_rows or [])
     ]
 
 
-    # ── Top 5 fichiers les plus analysés ────────────────────────────
+def _get_top_files(tenant_filter: str, tenant_params: tuple) -> List[Dict]:
     top_query = f"""
         SELECT filename, COUNT(*) as runs, COALESCE(SUM(total_errors_found),0) as total_errors
         FROM analyses{tenant_filter}
@@ -723,42 +740,47 @@ def get_dashboard_stats(tenant_id: Optional[int] = None) -> Dict:
         LIMIT 5
     """
     top_rows = _execute(top_query, tenant_params, fetch=True)
-    top_files = [
+    return [
         {"filename": str(r["filename"]), "runs": int(r["runs"]), "total_errors": int(r["total_errors"])}
         for r in (top_rows or [])
     ]
 
-    # ── Catégories d'erreurs ─────────────────────────────────────────
-    if _is_postgres():
-        cat_query = """
-            SELECT ae.category, COUNT(*) as cnt
-            FROM analysis_errors ae
-            JOIN analyses a ON a.id = ae.analysis_id
-            {where}
-            GROUP BY ae.category ORDER BY cnt DESC LIMIT 8
-        """.format(where=f"WHERE a.tenant_id = {ph}" if tenant_id is not None else "")
-    else:
-        cat_query = """
-            SELECT ae.category, COUNT(*) as cnt
-            FROM analysis_errors ae
-            JOIN analyses a ON a.id = ae.analysis_id
-            {where}
-            GROUP BY ae.category ORDER BY cnt DESC LIMIT 8
-        """.format(where="WHERE a.tenant_id = ?" if tenant_id is not None else "")
 
+def _get_errors_by_category(ph: str, tenant_id: Optional[int], tenant_params: tuple) -> List[Dict]:
+    where_clause = f"WHERE a.tenant_id = {ph}" if tenant_id is not None else ""
+    cat_query = """
+        SELECT ae.category, COUNT(*) as cnt
+        FROM analysis_errors ae
+        JOIN analyses a ON a.id = ae.analysis_id
+        {where}
+        GROUP BY ae.category ORDER BY cnt DESC LIMIT 8
+    """.format(where=where_clause)
     cat_rows = _execute(cat_query, tenant_params, fetch=True)
-    errors_by_category = [
+    return [
         {"category": str(r["category"] or "Autre"), "count": int(r["cnt"])}
         for r in (cat_rows or [])
     ]
 
+
+def get_dashboard_stats(tenant_id: Optional[int] = None) -> Dict:
+    """Retourne les statistiques globales pour le dashboard."""
+    ph = "%s" if _is_postgres() else "?"
+    tenant_filter = f" WHERE tenant_id = {ph}" if tenant_id is not None else ""
+    tenant_params = (tenant_id,) if tenant_id is not None else ()
+
+    totals = _get_dashboard_totals(tenant_filter, tenant_params)
+    errors_by_level = _get_errors_by_level(ph, tenant_id, tenant_params)
+    analyses_per_day = _get_analyses_per_day(ph, tenant_id, tenant_params)
+    top_files = _get_top_files(tenant_filter, tenant_params)
+    errors_by_category = _get_errors_by_category(ph, tenant_id, tenant_params)
+
     return {
-        "total_analyses":    total_analyses,
-        "total_errors":      total_errors,
-        "total_analyzed":    total_analyzed,
-        "errors_by_level":   errors_by_level,
-        "analyses_per_day":  analyses_per_day,
-        "top_files":         top_files,
+        "total_analyses": totals["total_analyses"],
+        "total_errors": totals["total_errors"],
+        "total_analyzed": totals["total_analyzed"],
+        "errors_by_level": errors_by_level,
+        "analyses_per_day": analyses_per_day,
+        "top_files": top_files,
         "errors_by_category": errors_by_category,
     }
 
@@ -803,5 +825,3 @@ def get_otp(email: str) -> Optional[dict]:
 def delete_otp(email: str) -> None:
     query = "DELETE FROM otps WHERE email = %s" if _is_postgres() else "DELETE FROM otps WHERE email = ?"
     _execute(query, (email,))
-
-
