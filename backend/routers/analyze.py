@@ -14,7 +14,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analyze"], dependencies=[Depends(get_current_user_or_api_key)], deprecated=True)
 
 
-@router.post("/analyze", response_model=LegacyAnalyzeResponse, deprecated=True)
+@router.post(
+    "/analyze",
+    response_model=LegacyAnalyzeResponse,
+    deprecated=True,
+    responses={
+        403: {"description": "Droit insuffisant pour soumettre une analyse (rôle admin ou analyst requis)."},
+    },
+)
 async def analyze_log(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user_or_api_key)
