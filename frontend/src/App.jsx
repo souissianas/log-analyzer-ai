@@ -27,6 +27,41 @@ const VIEWS = {
   USERS: 'users',
 }
 
+const MAX_ERRORS = 999999
+
+// ── Helpers extraits pour limiter la profondeur d'imbrication de handleAnalyze ─
+
+/**
+ * Enveloppe streamJobProgress dans une Promise qui se résout avec le payload
+ * `onDone` (contenant log_id) ou rejette avec le message `onError`.
+ * `registerStream` permet au caller de récupérer le handle `close()` du stream.
+ */
+function waitForJobDone(jobId, onProgress, registerStream) {
+  return new Promise((resolve, reject) => {
+    const stream = streamJobProgress(jobId, {
+      onProgress,
+      onDone: (payload) => resolve(payload),
+      onError: (msg) => reject(new Error(msg)),
+    })
+    registerStream(stream)
+  })
+}
+
+function buildCompletionMessage(fileName, language) {
+  return language === 'fr'
+    ? `Analyse terminée — ${fileName}`
+    : `Analysis completed — ${fileName}`
+}
+
+function addCompletionNotification(setNotifications, fileName, language) {
+  const text = buildCompletionMessage(fileName, language)
+  const time = new Date().toLocaleTimeString(
+    language === 'fr' ? 'fr-FR' : 'en-US',
+    { hour: '2-digit', minute: '2-digit' },
+  )
+  setNotifications((prev) => [{ id: Date.now(), text, time, read: false }, ...prev.slice(0, 9)])
+}
+
 export default function App() {
   const { language, setLanguage, t } = useTranslation()
   const [user, setUser] = useState(() => getCurrentUser())
@@ -117,44 +152,29 @@ export default function App() {
     localStorage.setItem('lastLogin', new Date().toISOString())
   }
 
+  function handleJobProgress({ current, total }) {
+    setProgress({ current: current ?? 0, total: total ?? 0 })
+  }
+
   async function handleAnalyze(file) {
     resetState()
     setLoading(true)
     setActiveView(VIEWS.ANALYZE)
 
     try {
-      const maxErrors = 999999
-      const job = await submitAnalysisJob(file, maxErrors)
+      const job = await submitAnalysisJob(file, MAX_ERRORS)
       setProgress({ current: 0, total: 0 })
 
-      await new Promise((resolve, reject) => {
-        const stream = streamJobProgress(job.job_id, {
-          onProgress: ({ current, total }) => {
-            setProgress({ current: current ?? 0, total: total ?? 0 })
-          },
-          onDone: async ({ log_id }) => {
-            try {
-              const { result } = await getJobResult(job.job_id)
-              setResults({ ...result, log_id })
-              setHistoryKey((k) => k + 1)
-              const msg = language === 'fr'
-                ? `Analyse terminée — ${file.name}`
-                : `Analysis completed — ${file.name}`
-              setNotifications(prev => [{
-                id: Date.now(),
-                text: msg,
-                time: new Date().toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' }),
-                read: false,
-              }, ...prev.slice(0, 9)])
-              resolve()
-            } catch (fetchErr) {
-              reject(fetchErr)
-            }
-          },
-          onError: (msg) => reject(new Error(msg)),
-        })
-        streamRef.current = stream
-      })
+      const { log_id } = await waitForJobDone(
+        job.job_id,
+        handleJobProgress,
+        (stream) => { streamRef.current = stream },
+      )
+
+      const { result } = await getJobResult(job.job_id)
+      setResults({ ...result, log_id })
+      setHistoryKey((k) => k + 1)
+      addCompletionNotification(setNotifications, file.name, language)
     } catch (err) {
       setError(String(err))
     } finally {
