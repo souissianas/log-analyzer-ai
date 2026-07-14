@@ -16,7 +16,7 @@ import {
   fetchAnalysis,
   downloadAnalysisPdf,
   getCurrentUser,
-  fetchCurrentUser,
+  syncCurrentUser,
   logout,
 } from './api'
 
@@ -25,23 +25,6 @@ const VIEWS = {
   HISTORY: 'history',
   DASHBOARD: 'dashboard',
   USERS: 'users',
-}
-
-// SonarCloud: "Ensure that tainted data is sanitized before being written
-// to browser storage." `freshUser` comes from an HTTP response, so its
-// fields are treated as untrusted even though the API is our own backend —
-// a role or email value must match its expected shape before we persist it
-// to localStorage (which is also readable by any XSS payload that might
-// run on the page, so we don't want to blindly store arbitrary strings).
-const VALID_ROLES = new Set(['admin', 'analyst', 'viewer'])
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function sanitizeRole(role) {
-  return typeof role === 'string' && VALID_ROLES.has(role) ? role : null
-}
-
-function sanitizeEmail(email) {
-  return typeof email === 'string' && EMAIL_RE.test(email) ? email : null
 }
 
 export default function App() {
@@ -93,30 +76,21 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  // Fetch current user on mount / login to get fresh role and status
+  function handleLogout() {
+    logout()
+    setUser(null)
+    resetState()
+    setShowProfileMenu(false)
+  }
+
+  // Fetch current user on mount / login to get fresh role and status.
+  // syncCurrentUser (api.js) validates the response and persists role/email
+  // to localStorage itself — App.jsx only consumes the already-safe result.
   useEffect(() => {
     if (user && user.token) {
-      fetchCurrentUser()
+      syncCurrentUser()
         .then(freshUser => {
           setUser(prev => ({ ...prev, ...freshUser }))
-
-          // Validate shape before persisting to localStorage (see note above).
-          const safeRole = sanitizeRole(freshUser.role)
-          const safeEmail = sanitizeEmail(freshUser.email)
-
-          if (safeRole) {
-            localStorage.setItem('role', safeRole)
-          } else {
-            console.warn('fetchCurrentUser returned an unexpected role value, not persisting it')
-            localStorage.removeItem('role')
-          }
-
-          if (safeEmail) {
-            localStorage.setItem('email', safeEmail)
-          } else {
-            console.warn('fetchCurrentUser returned an unexpected email value, not persisting it')
-            localStorage.removeItem('email')
-          }
         })
         .catch(err => {
           console.error('Error updating user info:', err)
@@ -125,6 +99,7 @@ export default function App() {
           }
         })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.token])
 
   // ── Core handlers ───────────────────────────────────────────────
@@ -140,13 +115,6 @@ export default function App() {
     setUser(userData)
     setHistoryKey((k) => k + 1)
     localStorage.setItem('lastLogin', new Date().toISOString())
-  }
-
-  function handleLogout() {
-    logout()
-    setUser(null)
-    resetState()
-    setShowProfileMenu(false)
   }
 
   async function handleAnalyze(file) {
@@ -169,7 +137,7 @@ export default function App() {
               const { result } = await getJobResult(job.job_id)
               setResults({ ...result, log_id })
               setHistoryKey((k) => k + 1)
-              const msg = language === 'fr' 
+              const msg = language === 'fr'
                 ? `Analyse terminée — ${file.name}`
                 : `Analysis completed — ${file.name}`
               setNotifications(prev => [{
@@ -221,13 +189,16 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
 
-  const loadingMessage = loading
-    ? progress.total > 0
-      ? (language === 'fr' 
-          ? `Analyse IA — erreur ${progress.current + 1} / ${progress.total}…`
-          : `AI Analysis — error ${progress.current + 1} / ${progress.total}…`)
-      : (language === 'fr' ? 'Soumission de l\'analyse…' : 'Submitting analysis…')
-    : null
+  function getLoadingMessage() {
+    if (!loading) return null
+    if (progress.total > 0) {
+      return language === 'fr'
+        ? `Analyse IA — erreur ${progress.current + 1} / ${progress.total}…`
+        : `AI Analysis — error ${progress.current + 1} / ${progress.total}…`
+    }
+    return language === 'fr' ? 'Soumission de l\'analyse…' : 'Submitting analysis…'
+  }
+  const loadingMessage = getLoadingMessage()
 
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -241,24 +212,6 @@ export default function App() {
     if (h < 24) return t('dateHoursAgo', { n: h })
     return date.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')
   }
-
-  const getParsedToken = () => {
-    try {
-      if (!user || !user.token) return {}
-      const base64Url = user.token.split('.')[1]
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-      const jsonPayload = decodeURIComponent(
-        window.atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      )
-      return JSON.parse(jsonPayload)
-    } catch (e) {
-      return {}
-    }
-  }
-  const tokenPayload = getParsedToken()
 
   const navItems = [
     {
