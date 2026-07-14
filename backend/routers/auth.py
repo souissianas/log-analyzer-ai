@@ -4,7 +4,6 @@ import os
 import hashlib
 from datetime import timedelta
 from fastapi import APIRouter, HTTPException, status, Depends, Request
-
 from core.jwt import (
     verify_password,
     get_password_hash,
@@ -26,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Primary: Redis-backed sliding window (scales across replicas/pods).
 # Fallback: in-memory dict (single-process only — used when Redis is offline).
 _rate_limit_store: dict[str, list[float]] = {}
-
 _rl_redis_client = None
+
 
 def _get_rl_redis():
     """Return a Redis client for rate limiting, or None if unavailable."""
@@ -72,7 +71,6 @@ def check_rate_limit(key: str, max_requests: int = 5, window_seconds: int = 900)
         except Exception as exc:
             logger.warning("Redis rate-limit check failed, falling back to memory: %s", exc)
             # Fall through to in-memory fallback below
-
     # In-memory fallback
     attempts = _rate_limit_store.get(key, [])
     attempts = [t for t in attempts if now - t < window_seconds]
@@ -95,7 +93,6 @@ def record_attempt(key: str):
             return
         except Exception as exc:
             logger.warning("Redis record_attempt failed, falling back to memory: %s", exc)
-
     # In-memory fallback
     if key not in _rate_limit_store:
         _rate_limit_store[key] = []
@@ -105,10 +102,19 @@ def record_attempt(key: str):
 def hash_otp(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=Token,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Un utilisateur avec cet email existe déjà"},
+        201: {"description": "Compte créé — token renvoyé si premier utilisateur (admin), sinon compte en attente de validation"},
+    },
+)
 async def register(payload: UserRegister):
     # Check if user already exists
     existing_user = storage.get_user_by_email(payload.email)
@@ -117,25 +123,21 @@ async def register(payload: UserRegister):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Un utilisateur avec cet email existe déjà"
         )
-
     # Check or create tenant
     tenant = storage.get_tenant_by_slug(payload.tenant_slug)
     if tenant:
         tenant_id = tenant["id"]
     else:
         tenant_id = storage.create_tenant(payload.tenant_name, payload.tenant_slug)
-
     # Determine status: first user in tenant becomes admin and is auto-activated
     existing_count = storage.count_users_by_tenant(tenant_id)
     is_first_user = existing_count == 0
-
     if is_first_user:
         user_role = "admin"
         user_status = "active"
     else:
         user_role = payload.role or "viewer"
         user_status = "pending"  # Must be validated by an admin
-
     # Create user
     hashed_pwd = get_password_hash(payload.password)
     user_id = storage.create_user(
@@ -145,7 +147,6 @@ async def register(payload: UserRegister):
         hashed_password=hashed_pwd,
         status=user_status,
     )
-
     if not is_first_user:
         # Return info without a full access token — account is pending
         raise HTTPException(
@@ -156,7 +157,6 @@ async def register(payload: UserRegister):
                 "email": payload.email,
             }
         )
-
     # First user (admin) — create full JWT immediately
     token_data = {
         "sub": payload.email,
@@ -167,7 +167,6 @@ async def register(payload: UserRegister):
     }
     token = create_access_token(token_data, expires_delta=timedelta(hours=8))
     refresh_token = create_refresh_token(token_data)
-
     return Token(
         access_token=token,
         refresh_token=refresh_token,
@@ -176,7 +175,14 @@ async def register(payload: UserRegister):
     )
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    responses={
+        401: {"description": "Email ou mot de passe incorrect"},
+        403: {"description": "Compte en attente de validation ou refusé"},
+    },
+)
 async def login(payload: UserLogin):
     user = storage.get_user_by_email(payload.email)
     if not user:
@@ -184,13 +190,11 @@ async def login(payload: UserLogin):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
         )
-
     if not verify_password(payload.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
         )
-
     # Check account status
     user_status = user.get("status", "active")
     if user_status == "pending":
@@ -203,7 +207,6 @@ async def login(payload: UserLogin):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Votre compte a été refusé. Contactez un administrateur.",
         )
-
     token_data = {
         "sub": user["email"],
         "user_id": user["id"],
@@ -213,7 +216,6 @@ async def login(payload: UserLogin):
     }
     token = create_access_token(token_data, expires_delta=timedelta(hours=8))
     refresh_token = create_refresh_token(token_data)
-
     return Token(
         access_token=token,
         refresh_token=refresh_token,
@@ -222,7 +224,12 @@ async def login(payload: UserLogin):
     )
 
 
-@router.get("/me")
+@router.get(
+    "/me",
+    responses={
+        404: {"description": "Utilisateur introuvable"},
+    },
+)
 async def get_current_user_info(current_user: dict = Depends(get_current_user_or_api_key)):
     """Retourne les informations de l'utilisateur connecté."""
     user_id = current_user.get("user_id")
@@ -234,7 +241,6 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user_or
             "status": "active",
             "tenant_id": current_user.get("tenant_id"),
         }
-
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
@@ -248,7 +254,14 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user_or
     }
 
 
-@router.post("/refresh", response_model=Token)
+@router.post(
+    "/refresh",
+    response_model=Token,
+    responses={
+        401: {"description": "Token de rafraîchissement invalide, expiré ou utilisateur introuvable"},
+        403: {"description": "Compte en attente de validation ou refusé"},
+    },
+)
 async def refresh(payload: RefreshRequest):
     # Decode refresh token
     token_data, error = decode_refresh_token(payload.refresh_token)
@@ -257,7 +270,7 @@ async def refresh(payload: RefreshRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de rafraîchissement invalide ou expiré",
         )
-    
+
     # Get user to verify status (status checked in DB, e.g. for revocation)
     user_id = token_data.get("user_id")
     user = storage.get_user_by_id(user_id)
@@ -266,7 +279,7 @@ async def refresh(payload: RefreshRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Utilisateur introuvable",
         )
-    
+
     user_status = user.get("status", "active")
     if user_status == "pending":
         raise HTTPException(
@@ -278,7 +291,7 @@ async def refresh(payload: RefreshRequest):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Votre compte a été refusé. Contactez un administrateur.",
         )
-    
+
     # Create new access and refresh tokens
     new_token_data = {
         "sub": user["email"],
@@ -287,10 +300,10 @@ async def refresh(payload: RefreshRequest):
         "role": user["role"],
         "status": user_status,
     }
-    
+
     new_access_token = create_access_token(new_token_data, expires_delta=timedelta(hours=8))
     new_refresh_token = create_refresh_token(new_token_data)
-    
+
     return Token(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
@@ -299,44 +312,42 @@ async def refresh(payload: RefreshRequest):
     )
 
 
-@router.post("/forgot-password")
+@router.post(
+    "/forgot-password",
+    responses={
+        429: {"description": "Trop de demandes de réinitialisation (limite par IP ou par email atteinte)"},
+    },
+)
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Génère un OTP à 6 chiffres et l'envoie via WhatsApp si disponible."""
     email = body.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
-
     # Rate limit by IP: max 10 requests per 15 minutes
     if check_rate_limit(f"ip_forgot_{client_ip}", max_requests=10, window_seconds=900):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Trop de demandes de réinitialisation de mot de passe depuis cette adresse IP. Veuillez réessayer plus tard."
         )
-
     # Rate limit by Email: max 5 requests per 15 minutes
     if check_rate_limit(f"email_forgot_{email}", max_requests=5, window_seconds=900):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Trop de demandes de réinitialisation de mot de passe pour cet e-mail. Veuillez réessayer plus tard."
         )
-
     record_attempt(f"ip_forgot_{client_ip}")
     record_attempt(f"email_forgot_{email}")
-
     user = storage.get_user_by_email(email)
     # Always return success to avoid email enumeration
     if not user:
         return {"message": "Si cet email existe, un code a été envoyé."}
-
     code = f"{secrets.randbelow(1_000_000):06d}"
     hashed_code = hash_otp(code)
     storage.save_otp(email, hashed_code, time.time() + 600)  # 10 min
-
     env = os.environ.get("ENV", "development")
     if env != "production":
         logger.info(f"[PASSWORD RESET] OTP pour {email}: {code}")
     else:
         logger.info(f"[PASSWORD RESET] OTP généré pour {email}")
-
     # Try to send via Email (SMTP)
     email_sent = False
     try:
@@ -363,7 +374,6 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
             logger.info(f"[PASSWORD RESET] Email envoyé à {email}")
     except Exception as exc:
         logger.warning(f"[PASSWORD RESET] Erreur d'envoi d'email SMTP: {exc}")
-
     # Try to send via WhatsApp
     whatsapp_sent = False
     try:
@@ -375,38 +385,37 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
             logger.info(f"[PASSWORD RESET] WhatsApp envoyé à {email}")
     except Exception as exc:
         logger.warning(f"[PASSWORD RESET] Erreur WhatsApp: {exc}")
-
     if not email_sent and not whatsapp_sent:
         logger.warning(f"[PASSWORD RESET] Aucun canal (Email/WhatsApp) disponible, code visible uniquement dans les logs.")
-
     return {"message": "Si cet email existe, un code a été envoyé."}
 
 
-@router.post("/reset-password")
+@router.post(
+    "/reset-password",
+    responses={
+        400: {"description": "Aucun code actif, code expiré ou code incorrect"},
+        429: {"description": "Trop de tentatives de réinitialisation (limite par IP ou par email atteinte)"},
+    },
+)
 async def reset_password(body: ResetPasswordRequest, request: Request):
     """Vérifie l'OTP et met à jour le mot de passe."""
     email = body.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
-
     # Rate limit by IP: max 10 attempts per 15 minutes
     if check_rate_limit(f"ip_reset_{client_ip}", max_requests=10, window_seconds=900):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Trop de tentatives de réinitialisation de mot de passe depuis cette adresse IP. Veuillez réessayer plus tard."
         )
-
     # Rate limit by Email: max 5 attempts per 15 minutes
     if check_rate_limit(f"email_reset_{email}", max_requests=5, window_seconds=900):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Trop de tentatives de validation de code pour cet e-mail. Veuillez réessayer plus tard."
         )
-
     record_attempt(f"ip_reset_{client_ip}")
     record_attempt(f"email_reset_{email}")
-
     entry = storage.get_otp(email)
-
     if not entry:
         raise HTTPException(status_code=400, detail="Aucun code de réinitialisation actif pour cet email.")
     if time.time() > entry["expires"]:
@@ -414,10 +423,8 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
         raise HTTPException(status_code=400, detail="Le code a expiré. Veuillez en demander un nouveau.")
     if entry["code"] != hash_otp(body.code):
         raise HTTPException(status_code=400, detail="Code incorrect.")
-
     hashed = get_password_hash(body.new_password)
     storage.update_user_password(email, hashed)
     storage.delete_otp(email)
-
     logger.info(f"[PASSWORD RESET] Mot de passe mis à jour pour {email}")
     return {"message": "Mot de passe mis à jour avec succès."}
