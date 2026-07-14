@@ -5,6 +5,54 @@ const API_KEY = import.meta.env.VITE_API_KEY || ''
 const REQUEST_TIMEOUT_MS = 300_000   // 5 min — long enough for Ollama on slow hardware
 const SSE_RETRY_DELAY_MS  = 3_000    // wait 3s before reconnecting SSE
 
+// SonarCloud: "Ensure that tainted data is sanitized before being written
+// to browser storage." Any field coming out of an HTTP response body is
+// untrusted input as far as the taint analysis is concerned, so role/email
+// values must be checked against an expected shape before they are persisted
+// to localStorage. These are the single source of truth for that validation;
+// App.jsx imports them instead of re-declaring its own copies.
+const VALID_ROLES = new Set(['admin', 'analyst', 'viewer'])
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function sanitizeRole(role) {
+  return typeof role === 'string' && VALID_ROLES.has(role) ? role : null
+}
+
+export function sanitizeEmail(email) {
+  return typeof email === 'string' && EMAIL_RE.test(email) ? email : null
+}
+
+// Single choke point for writing identity fields to localStorage. Every
+// caller — login, register, and the periodic refresh in syncCurrentUser —
+// goes through here, so the sanitize-then-store flow lives in one place
+// and one file, which is what keeps Sonar's dataflow analysis (and any
+// human reviewer) able to see source and sink together.
+function persistIdentity({ role, email } = {}) {
+  const safeRole = sanitizeRole(role)
+  const safeEmail = sanitizeEmail(email)
+
+  if (safeRole) {
+    localStorage.setItem('role', safeRole)
+  } else {
+    console.warn('Received an unexpected role value, not persisting it')
+    localStorage.removeItem('role')
+  }
+
+  if (safeEmail) {
+    localStorage.setItem('email', safeEmail)
+  } else {
+    console.warn('Received an unexpected email value, not persisting it')
+    localStorage.removeItem('email')
+  }
+}
+
+function persistSession(data) {
+  if (typeof data.access_token === 'string' && data.access_token) {
+    localStorage.setItem('token', data.access_token)
+  }
+  persistIdentity(data)
+}
+
 function buildHeaders(extra = {}) {
   const headers = { ...extra }
   const token = localStorage.getItem('token')
@@ -27,9 +75,7 @@ export async function login(email, password) {
     throw new Error(data.detail || 'Email ou mot de passe incorrect')
   }
   const data = await res.json()
-  localStorage.setItem('token', data.access_token)
-  localStorage.setItem('role', data.role)
-  localStorage.setItem('email', data.email)
+  persistSession(data)
   return data
 }
 
@@ -50,9 +96,7 @@ export async function register(email, password, tenantName, tenantSlug, role = '
     throw new Error(data.detail || 'Erreur lors de l\'inscription')
   }
   const data = await res.json()
-  localStorage.setItem('token', data.access_token)
-  localStorage.setItem('role', data.role)
-  localStorage.setItem('email', data.email)
+  persistSession(data)
   return data
 }
 
@@ -106,6 +150,19 @@ export async function fetchCurrentUser() {
     throw new Error('Impossible de récupérer les informations de l\'utilisateur')
   }
   return res.json()
+}
+
+/**
+ * Fetch fresh user info from the backend AND persist the validated role/
+ * email to localStorage in the same place they're read from the response —
+ * callers (e.g. App.jsx) should use this instead of calling fetchCurrentUser
+ * + localStorage.setItem themselves, so untrusted response data is never
+ * written to browser storage outside of this file.
+ */
+export async function syncCurrentUser() {
+  const freshUser = await fetchCurrentUser()
+  persistIdentity(freshUser)
+  return freshUser
 }
 
 export async function fetchUsers() {
@@ -334,7 +391,9 @@ export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
             try {
               const payload = JSON.parse(line.slice(6))
               if (handlePayload(payload)) { stop = true; break }
-            } catch (_) { /* malformed line */ }
+            } catch {
+              /* malformed line — ignore and continue reading the stream */
+            }
           }
         }
 
