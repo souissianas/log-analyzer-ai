@@ -1,17 +1,42 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 venv/
 venv312/
+.venv/
+
+# Bases de données et logs
 backend_analysis.db
 *.db
+*.log
+
+# Secrets et environnement
 .env
 .env.*
-*.log
+*.pem
+*.key
+*.crt
+
+# Contrôle de version
+.git/
+.gitignore
+
+# Node
 node_modules/
+
+# Tests et outils de dev
 .pytest_cache/
 test_*.py
 resp_out.txt
 tmp_repro.py
 scripts/manual_checks/
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation (non nécessaire au runtime de l'image)
+*.md
+docs/
