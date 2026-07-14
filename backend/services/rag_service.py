@@ -9,6 +9,8 @@ Corrections appliquées :
   4. Log d'avertissement ajouté si nomic-embed-text n'est pas disponible
   5. Gestion d'erreur renforcée dans _get_client() avec retry=False pour éviter
      des tentatives répétées sur un ChromaDB absent
+  6. logger.error() remplacé par logger.exception() dans add_runbook() pour
+     capturer automatiquement la stack trace complète (recommandation SonarCloud)
 """
 from __future__ import annotations
 
@@ -22,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ──────────────────────────────────────────────────────────
 CHROMADB_HOST = os.environ.get("CHROMADB_HOST", "localhost")
-
 # FIX 1 : port 8001 par défaut (plus 8000) pour éviter le conflit avec FastAPI.
 # Dans docker-compose.yml, s'assurer que chromadb expose bien le port 8001 :
 #   chromadb:
@@ -62,7 +63,6 @@ def _get_client():
     # Ne pas retenter si on sait déjà que ChromaDB est absent
     if _client_unavailable:
         return None
-
     if _client is not None:
         return _client
 
@@ -80,7 +80,6 @@ def _get_client():
             },
         )
         return _client
-
     except Exception as exc:
         _client_unavailable = True
         logger.warning(
@@ -99,7 +98,6 @@ def _get_client():
 async def _embed(text: str) -> Optional[list[float]]:
     """
     Génère un vecteur d'embedding via Ollama (modèle nomic-embed-text).
-
     Retourne None si Ollama est absent ou si le modèle n'est pas pullé.
     Pour activer : `ollama pull nomic-embed-text`
     """
@@ -111,7 +109,6 @@ async def _embed(text: str) -> Optional[list[float]]:
             )
             resp.raise_for_status()
             embedding = resp.json().get("embedding")
-
             if embedding is None:
                 logger.warning(
                     "Ollama returned no embedding — modèle probablement absent",
@@ -122,7 +119,6 @@ async def _embed(text: str) -> Optional[list[float]]:
                     },
                 )
             return embedding
-
     except httpx.ConnectError:
         logger.warning(
             "Ollama unreachable for embeddings",
@@ -138,7 +134,6 @@ async def search_runbooks(query: str, n_results: int = 3) -> list[str]:
     """
     Retourne les n runbooks les plus pertinents pour un message de log donné.
     Retourne [] si ChromaDB ou Ollama embedding est indisponible.
-
     FIX 3 : seuls les résultats avec dist < SIMILARITY_THRESHOLD (0.8) sont retenus.
     """
     client = _get_client()
@@ -189,7 +184,6 @@ async def search_runbooks(query: str, n_results: int = 3) -> list[str]:
             )
 
         return relevant
-
     except Exception as exc:
         logger.warning(
             "ChromaDB query failed",
@@ -231,11 +225,12 @@ async def add_runbook(doc_id: str, category: str, content: str) -> bool:
             extra={"event": "runbook_ingested", "doc_id": doc_id, "category": category},
         )
         return True
-
-    except Exception as exc:
-        logger.error(
+    except Exception:
+        # FIX 6 : logging.exception() capture automatiquement la stack trace,
+        # contrairement à logger.error() qui ne loggue que le message str(exc).
+        logger.exception(
             "Runbook ingestion failed",
-            extra={"event": "runbook_ingest_error", "doc_id": doc_id, "error": str(exc)},
+            extra={"event": "runbook_ingest_error", "doc_id": doc_id},
         )
         return False
 
@@ -261,7 +256,6 @@ async def ensure_collection() -> bool:
                 extra={"event": "collection_created", "collection": COLLECTION_NAME},
             )
         return True
-
     except Exception as exc:
         logger.warning(
             "ChromaDB ensure_collection failed",
