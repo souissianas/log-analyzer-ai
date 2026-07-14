@@ -1,5 +1,6 @@
 """
 core/telemetry.py
+
 OpenTelemetry tracing setup — bootstraps SDK, instruments FastAPI,
 and exports spans to Jaeger via OTLP/gRPC.
 
@@ -57,11 +58,8 @@ def setup_telemetry(app, service_name: str = "log-analyzer-backend") -> None:
             extra={"event": "otel_enabled", "endpoint": _OTLP_ENDPOINT, "service": service_name},
         )
 
-    except Exception as exc:  # pragma: no cover
-        logger.warning(
-            "OpenTelemetry setup failed — tracing disabled",
-            extra={"event": "otel_error", "error": str(exc)},
-        )
+    except Exception:  # pragma: no cover
+        logger.exception("OpenTelemetry setup failed — tracing disabled")
 
 
 def get_tracer(name: str = "log-analyzer"):
@@ -87,11 +85,23 @@ class _NoopTracer:
 
 
 class _NoopSpan:
+    """
+    Stand-in span used when OpenTelemetry is disabled or unavailable.
+    Every method is an intentional no-op: callers use the same
+    `span.set_attribute(...)` / `span.record_exception(...)` / `span.set_status(...)`
+    API regardless of whether tracing is active, so call sites never need to
+    check `_OTEL_ENABLED` themselves. There is nothing to implement here —
+    the whole point is to silently discard these calls at zero cost.
+    """
+
     def set_attribute(self, *_):
+        # Intentionally empty: no-op, see class docstring.
         pass
 
     def record_exception(self, *_):
+        # Intentionally empty: no-op, see class docstring.
         pass
 
     def set_status(self, *_):
+        # Intentionally empty: no-op, see class docstring.
         pass
