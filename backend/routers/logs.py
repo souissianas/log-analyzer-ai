@@ -11,10 +11,10 @@ from services.classifier import classify_error
 from services.pdf_export import build_analysis_pdf
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/logs", tags=["logs"])
-
 stats_router = APIRouter(prefix="/stats", tags=["stats"])
+
+ANALYSE_NOT_FOUND = "Analyse introuvable"
 
 
 @stats_router.get("/dashboard")
@@ -24,7 +24,6 @@ def get_dashboard_stats(
     """Retourne les statistiques globales pour le dashboard."""
     tenant_id = current_user.get("tenant_id")
     return storage.get_dashboard_stats(tenant_id=tenant_id)
-
 
 
 @router.get("", response_model=AnalysisListResponse)
@@ -42,7 +41,13 @@ def list_saved_analyses(
     )
 
 
-@router.get("/{log_id}", response_model=AnalysisDetailResponse)
+@router.get(
+    "/{log_id}",
+    response_model=AnalysisDetailResponse,
+    responses={
+        404: {"description": ANALYSE_NOT_FOUND},
+    },
+)
 def get_saved_analysis(
     log_id: int,
     current_user: dict = Depends(get_current_user_or_api_key),
@@ -50,11 +55,17 @@ def get_saved_analysis(
     tenant_id = current_user.get("tenant_id")
     item = storage.get_analysis(log_id, tenant_id=tenant_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Analyse introuvable")
+        raise HTTPException(status_code=404, detail=ANALYSE_NOT_FOUND)
     return AnalysisDetailResponse(**item)
 
 
-@router.post("/{log_id}/export")
+@router.post(
+    "/{log_id}/export",
+    responses={
+        403: {"description": "Droit insuffisant pour exporter les analyses"},
+        404: {"description": ANALYSE_NOT_FOUND},
+    },
+)
 def export_analysis_pdf(
     log_id: int,
     current_user: dict = Depends(get_current_user_or_api_key),
@@ -65,7 +76,7 @@ def export_analysis_pdf(
     tenant_id = current_user.get("tenant_id")
     item = storage.get_analysis(log_id, tenant_id=tenant_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Analyse introuvable")
+        raise HTTPException(status_code=404, detail=ANALYSE_NOT_FOUND)
 
     bio = build_analysis_pdf(item)
     return StreamingResponse(
@@ -75,7 +86,13 @@ def export_analysis_pdf(
     )
 
 
-@router.post("/{log_id}/reanalyze")
+@router.post(
+    "/{log_id}/reanalyze",
+    responses={
+        403: {"description": "Droit insuffisant pour relancer l'analyse"},
+        404: {"description": ANALYSE_NOT_FOUND},
+    },
+)
 async def reanalyze_saved(
     log_id: int,
     max_errors: int = 5,
@@ -83,16 +100,14 @@ async def reanalyze_saved(
 ):
     if current_user.get("role") not in ("admin", "analyst"):
         raise HTTPException(status_code=403, detail="Droit insuffisant pour relancer l'analyse")
-
     tenant_id = current_user.get("tenant_id")
     user_id = current_user.get("user_id")
     item = storage.get_analysis(log_id, tenant_id=tenant_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Analyse introuvable")
+        raise HTTPException(status_code=404, detail=ANALYSE_NOT_FOUND)
 
     old = item.get("data") or {}
     analyzed = old.get("analyzed", [])[:max_errors]
-
     results = []
     for index, entry in enumerate(analyzed):
         log_line = (
@@ -112,7 +127,6 @@ async def reanalyze_saved(
                 "error": response.get("error"),
             }
         )
-
     new_payload = {
         "filename": old.get("filename", f"reanalyze_{log_id}"),
         "total_errors_found": len(old.get("analyzed", [])),
@@ -120,7 +134,5 @@ async def reanalyze_saved(
         "skipped": max(0, len(old.get("analyzed", [])) - max_errors),
         "analyzed": results,
     }
-
     new_id = storage.save_analysis(new_payload, tenant_id=tenant_id, user_id=user_id)
     return {"new_log_id": new_id, "result": new_payload}
-
