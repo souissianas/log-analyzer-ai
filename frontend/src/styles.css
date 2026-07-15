@@ -530,6 +530,8 @@ body {
 }
 
 /* ── RAG badge ─────────────────────────────────────────────────── */
+/* Fond rendu opaque (au lieu de rgba(99,102,241,0.85)) pour garantir
+   un ratio de contraste calculable et conforme WCAG AA (>= 4.5:1). */
 .rag-badge {
   display: inline-flex;
   align-items: center;
@@ -539,8 +541,8 @@ body {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  background: rgba(99, 102, 241, 0.85);
-  color: #eef0ff;
+  background: #4f46e5;
+  color: #ffffff;
   margin-left: 6px;
 }
 
@@ -1200,11 +1202,13 @@ body {
 }
 
 /* ── Nav Badge Overrides ── */
+/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
+   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
 .brand-badge {
   font-size: 0.7rem;
   font-weight: 700;
   background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  color: #93c5fd;
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -1480,10 +1484,12 @@ body {
   color: var(--text);
 }
 
+/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
+   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
 .runs-count-badge {
   font-size: 0.7rem;
   background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  color: #93c5fd;
   padding: 1px 6px;
   border-radius: 999px;
   font-weight: 700;
@@ -2022,11 +2028,13 @@ body {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+/* Texte éclairci (#fca5a5 au lieu de var(--error)) pour atteindre le
+   ratio de contraste WCAG AA (4.5:1) sur ce fond rouge diluAe. */
 .dash-error {
   padding: 16px 20px;
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.15);
-  color: var(--error);
+  color: #fca5a5;
   border-radius: 12px;
   font-weight: 500;
 }
@@ -3049,9 +3057,11 @@ body.theme-light .admin-table tr:hover td {
   border-color: rgba(16, 185, 129, 0.25);
 }
 
+/* Texte éclairci (#fca5a5 au lieu de var(--error)) pour atteindre le
+   ratio de contraste WCAG AA (4.5:1) sur ce fond rouge diluAe. */
 .status-rejected {
   background: rgba(239, 68, 68, 0.1);
-  color: var(--error);
+  color: #fca5a5;
   border-color: rgba(239, 68, 68, 0.25);
 }
 
@@ -3139,9 +3149,11 @@ body.theme-light .admin-table tr:hover td {
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
+/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
+   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
 .user-role-badge.role-analyst {
   background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  color: #93c5fd;
   border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
