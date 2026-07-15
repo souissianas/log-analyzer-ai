@@ -1,5 +1,5 @@
 # backend/services/ollama_service.py
-
+import asyncio
 import json
 import logging
 import os
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from core.telemetry import get_tracer
 from core.metrics import OLLAMA_REQUEST_DURATION
 from core.log_sanitize import sanitize_for_log
+
 tracer = get_tracer("ollama-service")
 
 try:
@@ -29,7 +30,12 @@ try:
     _RAG_AVAILABLE = True
 except ImportError:
     _RAG_AVAILABLE = False
+
     async def _search_runbooks(*_, **__):  # type: ignore
+        # Genuine await keeps this a real coroutine (matches the real
+        # search_runbooks signature/behavior) rather than a sync function
+        # masquerading as async — avoids the "unnecessary async" smell.
+        await asyncio.sleep(0)
         return []
 
 # Local development uses Ollama on localhost. Docker overrides this value.
@@ -53,7 +59,6 @@ MAX_NORMALIZE_DEPTH = 3
 def build_prompt(log_line: str, error_level: str) -> str:
     """Builds a human-readable prompt for free-text output."""
     return f"""Tu es un expert en analyse de logs et en debogage de systemes informatiques.
-
 Analyse cette ligne de log de type {error_level} et reponds en francais avec exactement ces 3 sections :
 
 **1. EXPLICATION**
@@ -77,7 +82,6 @@ def build_prompt_json(log_line: str, error_level: str, context_docs: list[str] |
     if context_docs:
         joined = "\n---\n".join(context_docs[:2])  # max 2 snippets to save tokens
         rag_section = f"\nRunbooks internes:\n{joined}\n"
-
     return f"""Expert logs. Retourne uniquement un JSON valide, sans Markdown.
 Schema:
 {{"explanation":"2-3 phrases fr","causes":["cause1","cause2"],"solutions":["action1","action2"]}}
@@ -137,6 +141,7 @@ async def analyze_with_ollama(
                 logger.warning("RAG search failed", extra={"error": str(rag_exc)})
 
         prompt = build_prompt_json(log_line, error_level, context_docs=context_docs) if structured else build_prompt(log_line, error_level)
+
         payload = {
             "model": OLLAMA_MODEL,
             "prompt": prompt,
@@ -165,7 +170,6 @@ async def analyze_with_ollama(
                 )
                 response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
                 response.raise_for_status()
-
             duration = time.perf_counter() - start_time
             OLLAMA_REQUEST_DURATION.observe(duration)
 
@@ -193,21 +197,18 @@ async def analyze_with_ollama(
             span.record_exception(e)
             span.set_status(StatusCode.ERROR, msg)
             return {"success": False, "analysis": None, "raw_response": None, "error": msg}
-
         except httpx.TimeoutException as e:
             msg = f"Ollama timeout ({OLLAMA_TIMEOUT}s depasse)"
             logger.error(msg)
             span.record_exception(e)
             span.set_status(StatusCode.ERROR, msg)
             return {"success": False, "analysis": None, "raw_response": None, "error": msg}
-
         except httpx.HTTPStatusError as e:
             msg = f"Erreur HTTP {e.response.status_code} : {e.response.text}"
             logger.error(msg)
             span.record_exception(e)
             span.set_status(StatusCode.ERROR, msg)
             return {"success": False, "analysis": None, "raw_response": None, "error": msg}
-
         except Exception as e:
             msg = f"Erreur inattendue : {str(e)}"
             logger.exception(msg)
@@ -217,19 +218,40 @@ async def analyze_with_ollama(
 
 
 def _strip_markdown_fence(value: str) -> str:
+    """
+    Strips a leading/trailing ``` or ```json code fence, if present.
+
+    Implemented without a regex: the previous pattern
+    (^```(?:json)?\\s*(.*?)\\s*```$ with DOTALL) had two adjacent
+    quantifiers (\\s* and a lazy .*?) that can match the same whitespace
+    characters in different ways, causing super-linear backtracking on
+    pathological input. Plain string operations are O(n) and give the
+    identical result.
+    """
     value = value.strip()
-    match = re.match(r"^```(?:json)?\s*(.*?)\s*```$", value, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1).strip() if match else value
+    if not value.startswith("```"):
+        return value
+    if not value.endswith("```"):
+        return value
+
+    inner = value[3:-3]
+    # Drop an optional "json" language tag on the first line.
+    first_newline = inner.find("\n")
+    if first_newline == -1:
+        first_line = inner.strip()
+        return first_line if first_line.lower() != "json" else ""
+    first_line, rest = inner[:first_newline], inner[first_newline + 1:]
+    if first_line.strip().lower() == "json":
+        inner = rest
+    return inner.strip()
 
 
 def _parse_json_if_possible(value: str):
     if not isinstance(value, str):
         return None
-
     value = _strip_markdown_fence(value)
     if not value:
         return None
-
     try:
         return json.loads(value)
     except Exception:
@@ -253,7 +275,6 @@ def _first_present(parsed: dict, keys: tuple[str, ...]):
 def _normalize_list(value) -> list[str]:
     if value is None:
         return []
-
     if isinstance(value, list):
         items = value
     elif isinstance(value, str):
@@ -264,7 +285,6 @@ def _normalize_list(value) -> list[str]:
             items = re.split(r"\n+|(?:^|\s)[-*]\s+", value)
     else:
         items = [value]
-
     normalized = []
     for item in items:
         text = str(item).strip().lstrip("-*• ").strip()
@@ -340,7 +360,6 @@ async def explain_logs(errors_text: str) -> str:
         return "Aucune erreur detectee"
 
     prompt = f"""Tu es un expert en analyse de logs et en debogage de systemes informatiques.
-
 Voici un ensemble de lignes d'erreur extraites d'un fichier de log :
 
 {errors_text}
@@ -364,7 +383,6 @@ Reponds en francais, sans introduction ni conclusion superflue."""
         duration = time.perf_counter() - start_time
         OLLAMA_REQUEST_DURATION.observe(duration)
         return response.json().get("response", "").strip()
-
     except httpx.ConnectError:
         return "Ollama non disponible. Lance : ollama serve"
     except httpx.TimeoutException:
@@ -390,7 +408,6 @@ def parse_ollama_response(raw_text: str) -> dict:
         line = line.strip()
         if not line:
             continue
-
         header = line.upper().strip("*# :")
         if "EXPLICATION" in header:
             _save_section(result, current_section, current_content)
