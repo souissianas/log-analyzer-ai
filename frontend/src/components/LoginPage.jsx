@@ -207,99 +207,112 @@ export default function LoginPage({ onLoginSuccess }) {
     </form>
   )
 
-  const renderLoginRegisterForm = () => (
-    <form onSubmit={handleSubmit} className="login-form">
-      <div className="form-group">
-        <label htmlFor="email">{t('loginEmailLabel')}</label>
-        <input
-          type="email"
-          id="email"
-          placeholder="nom@entreprise.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
+  const renderLoginRegisterForm = () => {
+    // Smell "Extract this nested ternary operation into an independent
+    // statement" : le libellé du bouton dépendait de deux conditions
+    // imbriquées (loading, puis view === 'register'). On les résout l'une
+    // après l'autre avant le JSX plutôt qu'en une seule expression.
+    let submitLabel
+    if (loading) {
+      submitLabel = t('loginLoading')
+    } else if (view === 'register') {
+      submitLabel = t('loginBtnSubmitRegister')
+    } else {
+      submitLabel = t('loginBtnSubmitLogin')
+    }
 
-      <div className="form-group">
-        <label htmlFor="password">{t('loginPasswordLabel')}</label>
-        <input
-          type="password"
-          id="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        {view === 'login' && (
+    return (
+      <form onSubmit={handleSubmit} className="login-form">
+        <div className="form-group">
+          <label htmlFor="email">{t('loginEmailLabel')}</label>
+          <input
+            type="email"
+            id="email"
+            placeholder="nom@entreprise.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="password">{t('loginPasswordLabel')}</label>
+          <input
+            type="password"
+            id="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {view === 'login' && (
+            <button
+              type="button"
+              className="btn-link forgot-link"
+              onClick={() => { setForgotEmail(email); switchView('forgot') }}
+            >
+              Mot de passe oublié ?
+            </button>
+          )}
+        </div>
+
+        {view === 'register' && (
+          <>
+            <div className="form-group">
+              <label htmlFor="tenantName">{t('loginOrgNameLabel')}</label>
+              <input
+                type="text"
+                id="tenantName"
+                placeholder="Acme Corp"
+                value={tenantName}
+                onChange={(e) => handleTenantNameChange(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="tenantSlug">{t('loginOrgSlugLabel')}</label>
+              <input
+                type="text"
+                id="tenantSlug"
+                placeholder="acme-corp"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="role">{t('loginDesiredRole')}</label>
+              <select
+                id="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              >
+                <option value="viewer">{t('loginRoleViewer')}</option>
+                <option value="analyst">{t('loginRoleAnalyst')}</option>
+                <option value="admin">{t('loginRoleAdmin')}</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        <button type="submit" className="btn-primary login-btn" disabled={loading}>
+          {submitLabel}
+        </button>
+
+        <div className="login-footer">
           <button
             type="button"
-            className="btn-link forgot-link"
-            onClick={() => { setForgotEmail(email); switchView('forgot') }}
+            className="btn-link"
+            onClick={() => switchView(view === 'register' ? 'login' : 'register')}
           >
-            Mot de passe oublié ?
+            {view === 'register' ? t('loginToggleHaveAccount') : t('loginToggleNewAccount')}
           </button>
-        )}
-      </div>
-
-      {view === 'register' && (
-        <>
-          <div className="form-group">
-            <label htmlFor="tenantName">{t('loginOrgNameLabel')}</label>
-            <input
-              type="text"
-              id="tenantName"
-              placeholder="Acme Corp"
-              value={tenantName}
-              onChange={(e) => handleTenantNameChange(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tenantSlug">{t('loginOrgSlugLabel')}</label>
-            <input
-              type="text"
-              id="tenantSlug"
-              placeholder="acme-corp"
-              value={tenantSlug}
-              onChange={(e) => setTenantSlug(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="role">{t('loginDesiredRole')}</label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
-              <option value="viewer">{t('loginRoleViewer')}</option>
-              <option value="analyst">{t('loginRoleAnalyst')}</option>
-              <option value="admin">{t('loginRoleAdmin')}</option>
-            </select>
-          </div>
-        </>
-      )}
-
-      <button type="submit" className="btn-primary login-btn" disabled={loading}>
-        {loading
-          ? t('loginLoading')
-          : (view === 'register' ? t('loginBtnSubmitRegister') : t('loginBtnSubmitLogin'))}
-      </button>
-
-      <div className="login-footer">
-        <button
-          type="button"
-          className="btn-link"
-          onClick={() => switchView(view === 'register' ? 'login' : 'register')}
-        >
-          {view === 'register' ? t('loginToggleHaveAccount') : t('loginToggleNewAccount')}
-        </button>
-      </div>
-    </form>
-  )
+        </div>
+      </form>
+    )
+  }
 
   // ─── Titles per view ──────────────────────────────────────────────────
   const subtitles = {
