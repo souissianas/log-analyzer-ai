@@ -23,29 +23,39 @@ export function sanitizeRole(role) {
   return Object.prototype.hasOwnProperty.call(ROLE_LOOKUP, role) ? ROLE_LOOKUP[role] : null
 }
 
-// Validates a "local@domain.tld" shape without a regex. The previous
-// pattern (/^[^\s@]+@[^\s@]+\.[^\s@]+$/) let the middle [^\s@]+ group and
-// the literal "." both match ordinary dot characters, so the engine had to
-// try every possible split point between them on a failed match — a
-// classic super-linear backtracking shape SonarCloud flags. Doing the
-// same three checks (one @, a dot in the domain that isn't first/last,
-// no whitespace) with plain string operations is O(n) and unambiguous.
-function looksLikeEmail(value) {
-  if (/\s/.test(value)) return false
+// Validates a "local@domain.tld" shape without a regex, and hands back the
+// validated local/domain substrings instead of a boolean. The previous
+// email pattern (/^[^\s@]+@[^\s@]+\.[^\s@]+$/) let the middle [^\s@]+ group
+// and the literal "." both match ordinary dot characters, so the engine had
+// to try every possible split point between them on a failed match — a
+// classic super-linear backtracking shape SonarCloud flags. Doing the same
+// three checks (one @, a dot in the domain that isn't first/last, no
+// whitespace) with plain string operations is O(n) and unambiguous.
+//
+// Returning the parsed { local, domain } (rather than just true/false) is
+// what lets sanitizeEmail rebuild its result from freshly-sliced
+// substrings instead of the original tainted reference — see the comment
+// on sanitizeEmail below.
+function parseEmailParts(value) {
+  if (/\s/.test(value)) return null
   const atIndex = value.indexOf('@')
-  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return false
+  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return null
   const local = value.slice(0, atIndex)
   const domain = value.slice(atIndex + 1)
-  if (!local || !domain) return false
+  if (!local || !domain) return null
   const dotIndex = domain.lastIndexOf('.')
-  return dotIndex > 0 && dotIndex < domain.length - 1
+  if (dotIndex <= 0 || dotIndex >= domain.length - 1) return null
+  return { local, domain }
 }
 
 export function sanitizeEmail(email) {
-  if (typeof email !== 'string' || !looksLikeEmail(email)) return null
+  if (typeof email !== 'string') return null
+  const parts = parseEmailParts(email)
+  if (!parts) return null
   // Re-build the string from its own validated parts instead of returning
-  // the original reference, for the same reason as sanitizeRole above.
-  return String(email)
+  // the original reference (String(email) would just wrap the same tainted
+  // value), for the same reason as sanitizeRole above.
+  return `${parts.local}@${parts.domain}`
 }
 
 // Single choke point for writing identity fields to localStorage. Every
