@@ -386,7 +386,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     except Exception as exc:
         logger.warning(f"[PASSWORD RESET] Erreur WhatsApp: {exc}")
     if not email_sent and not whatsapp_sent:
-        logger.warning(f"[PASSWORD RESET] Aucun canal (Email/WhatsApp) disponible, code visible uniquement dans les logs.")
+        logger.warning("[PASSWORD RESET] Aucun canal (Email/WhatsApp) disponible, code visible uniquement dans les logs.")
     return {"message": "Si cet email existe, un code a été envoyé."}
 
 
