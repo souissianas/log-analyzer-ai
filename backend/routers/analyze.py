@@ -4,7 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from core.security import get_current_user_or_api_key
-from core.upload import decode_upload, read_upload_with_limit, validate_log_extension
+from core.upload import (
+    decode_upload,
+    read_upload_with_limit,
+    validate_log_extension,
+)
 from schemas.analysis import (
     LegacyAnalyzeResponse,
     LogEntrySchema,
@@ -25,7 +29,6 @@ router = APIRouter(
 
 @router.post(
     "/analyze",
-    response_model=LegacyAnalyzeResponse,
     deprecated=True,
     responses={
         403: {
@@ -38,8 +41,13 @@ router = APIRouter(
 )
 async def analyze_log(
     file: Annotated[UploadFile, File(...)],
-    current_user: Annotated[dict, Depends(get_current_user_or_api_key)],
+    current_user: Annotated[
+        dict,
+        Depends(get_current_user_or_api_key),
+    ],
 ) -> LegacyAnalyzeResponse:
+    """Analyse un fichier de logs avec l'IA."""
+
     if current_user.get("role") not in ("admin", "analyst"):
         raise HTTPException(
             status_code=403,
