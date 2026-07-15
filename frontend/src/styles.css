@@ -6,7 +6,7 @@
   --surface-2: #222f47;
   --surface-3: #2e3e5c;
   --text: #f8fafc;
-  --muted: #64748b;
+  --muted: #94a3b8;
   --accent: #3b82f6;
   --accent-hover: #1d4ed8;
   --accent-glow: rgba(59, 130, 246, 0.15);
@@ -45,7 +45,7 @@ body.theme-light {
   --surface:   #f5f1ea;
   --surface-2: #ddd8ce;
   --text:      #2c2520;
-  --muted:     #7a6f64;
+  --muted:     #6b6055;
   --accent:    #2a6db5;
   --accent-hover: #1e5a9e;
   --error:     #c0392b;
@@ -67,7 +67,7 @@ body.theme-light {
 
   --level-unk-bg: rgba(122, 111, 100, 0.08);
   --level-unk-border: rgba(122, 111, 100, 0.3);
-  --level-unk-text: #7a6f64;
+  --level-unk-text: #6b6055;
 }
 
 /* Cartes et surfaces */
@@ -1029,7 +1029,7 @@ body {
 /* Descriptive text in forgot/reset forms */
 .forgot-desc {
   font-size: 0.875rem;
-  color: var(--text-muted, #8b9ab0);
+  color: var(--muted);
   margin-bottom: 1.25rem;
   line-height: 1.5;
 }
