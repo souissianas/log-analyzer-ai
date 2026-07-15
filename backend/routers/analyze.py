@@ -1,17 +1,26 @@
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from core.security import get_current_user_or_api_key
 from core.upload import decode_upload, read_upload_with_limit, validate_log_extension
-from schemas.analysis import LegacyAnalyzeResponse, LogEntrySchema, LogSummarySchema
+from schemas.analysis import (
+    LegacyAnalyzeResponse,
+    LogEntrySchema,
+    LogSummarySchema,
+)
 from services.classifier import classify_error
 from services.log_parser import get_log_summary, parse_log_file
 from services.ollama_service import explain_logs
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["analyze"], dependencies=[Depends(get_current_user_or_api_key)], deprecated=True)
+router = APIRouter(
+    tags=["analyze"],
+    dependencies=[Depends(get_current_user_or_api_key)],
+    deprecated=True,
+)
 
 
 @router.post(
@@ -19,15 +28,23 @@ router = APIRouter(tags=["analyze"], dependencies=[Depends(get_current_user_or_a
     response_model=LegacyAnalyzeResponse,
     deprecated=True,
     responses={
-        403: {"description": "Droit insuffisant pour soumettre une analyse (rôle admin ou analyst requis)."},
+        403: {
+            "description": (
+                "Droit insuffisant pour soumettre une analyse "
+                "(rôle admin ou analyst requis)."
+            ),
+        },
     },
 )
 async def analyze_log(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user_or_api_key)
-):
+    file: Annotated[UploadFile, File(...)],
+    current_user: Annotated[dict, Depends(get_current_user_or_api_key)],
+) -> LegacyAnalyzeResponse:
     if current_user.get("role") not in ("admin", "analyst"):
-        raise HTTPException(status_code=403, detail="Droit insuffisant pour soumettre une analyse")
+        raise HTTPException(
+            status_code=403,
+            detail="Droit insuffisant pour soumettre une analyse",
+        )
 
     validate_log_extension(file.filename)
 
@@ -40,9 +57,14 @@ async def analyze_log(
     errors = "\n".join(
         entry.message
         for entry in entries
-        if entry.level.lower() in ["error", "critical", "fail"]
+        if entry.level.lower() in {"error", "critical", "fail"}
     )
-    ai_explanation = await explain_logs(errors) if errors else "Aucune erreur détectée"
+
+    ai_explanation = (
+        await explain_logs(errors)
+        if errors
+        else "Aucune erreur détectée"
+    )
 
     return LegacyAnalyzeResponse(
         filename=file.filename,
