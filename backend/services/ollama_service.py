@@ -55,6 +55,11 @@ MAX_LOG_LINE_CHARS = 2000
 # pathologically nested JSON (e.g. {"analysis": {"analysis": {...}}}).
 MAX_NORMALIZE_DEPTH = 3
 
+# SonarCloud: "Define a constant instead of duplicating this literal" —
+# this message was previously written out twice (analyze_with_ollama and
+# explain_logs). Centralized here so both call sites stay in sync.
+ERR_OLLAMA_UNAVAILABLE = "Ollama non disponible. Lance : ollama serve"
+
 
 def build_prompt(log_line: str, error_level: str) -> str:
     """Builds a human-readable prompt for free-text output."""
@@ -96,6 +101,87 @@ def _is_structured_format(output_format: str) -> bool:
     return bool(output_format and output_format.lower() in STRUCTURED_FORMATS)
 
 
+def _truncate_log_line(log_line: str, span) -> str:
+    """
+    Truncates abnormally long lines (e.g. Java stack traces) so they don't
+    silently overflow Ollama's num_ctx window, and records the relevant
+    span attributes. Extracted out of analyze_with_ollama() purely to keep
+    that function's cognitive complexity under control.
+    """
+    original_len = len(log_line)
+    if original_len > MAX_LOG_LINE_CHARS:
+        log_line = log_line[:MAX_LOG_LINE_CHARS]
+        logger.warning(
+            "log_line truncated before Ollama call",
+            extra={"original_length": original_len, "truncated_to": MAX_LOG_LINE_CHARS},
+        )
+    span.set_attribute("log.original_length", original_len)
+    span.set_attribute("log.truncated", original_len > MAX_LOG_LINE_CHARS)
+    return log_line
+
+
+async def _retrieve_rag_context(log_line: str) -> list[str]:
+    """
+    Fetches runbook snippets for the RAG-enriched prompt. Failures here must
+    never break the main analysis flow, so any exception is swallowed and
+    logged as a warning, and an empty list is returned instead.
+    """
+    try:
+        context_docs = await _search_runbooks(log_line, n_results=3)
+        if context_docs:
+            # SonarCloud: "Change this code to not log user-controlled data" —
+            # log_line comes straight from the uploaded file / API body,
+            # so it must go through sanitize_for_log() before logging.
+            logger.info(
+                "RAG context retrieved",
+                extra={"n_docs": len(context_docs), "query": sanitize_for_log(log_line[:60])},
+            )
+        return context_docs
+    except Exception as rag_exc:
+        logger.warning("RAG search failed", extra={"error": str(rag_exc)})
+        return []
+
+
+def _build_payload(prompt: str, structured: bool) -> dict:
+    """Builds the Ollama /api/generate payload for a single request."""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "num_ctx": 1536,
+            "num_predict": 200,
+        },
+    }
+    if structured:
+        # Ollama supports JSON mode for models that can follow structured output.
+        payload["format"] = "json"
+    return payload
+
+
+def _handle_ollama_exception(
+    span,
+    exc: Exception,
+    message: str,
+    log_full_exception: bool = False,
+) -> dict:
+    """
+    Single place that turns any Ollama-related exception into the standard
+    error response shape. Factors out what used to be 4 near-identical
+    except-blocks in analyze_with_ollama() (one per exception type), which
+    was both a cognitive-complexity issue and a code-duplication smell.
+    """
+    if log_full_exception:
+        logger.exception(message)
+    else:
+        logger.error(message)
+    span.record_exception(exc)
+    span.set_status(StatusCode.ERROR, message)
+    return {"success": False, "analysis": None, "raw_response": None, "error": message}
+
+
 async def analyze_with_ollama(
     log_line: str,
     error_level: str,
@@ -110,52 +196,19 @@ async def analyze_with_ollama(
         span.set_attribute("log.level", error_level)
         span.set_attribute("ollama.model", OLLAMA_MODEL)
 
-        # Truncate abnormally long lines (e.g. Java stack traces) so they
-        # don't silently overflow Ollama's num_ctx window.
-        original_len = len(log_line)
-        if original_len > MAX_LOG_LINE_CHARS:
-            log_line = log_line[:MAX_LOG_LINE_CHARS]
-            logger.warning(
-                "log_line truncated before Ollama call",
-                extra={"original_length": original_len, "truncated_to": MAX_LOG_LINE_CHARS},
-            )
-        span.set_attribute("log.original_length", original_len)
-        span.set_attribute("log.truncated", original_len > MAX_LOG_LINE_CHARS)
-
+        log_line = _truncate_log_line(log_line, span)
         structured = _is_structured_format(output_format)
 
-        # RAG context retrieval
         context_docs: list[str] = []
         if structured and use_rag and _RAG_AVAILABLE:
-            try:
-                context_docs = await _search_runbooks(log_line, n_results=3)
-                if context_docs:
-                    # SonarCloud: "Change this code to not log user-controlled data" —
-                    # log_line comes straight from the uploaded file / API body,
-                    # so it must go through sanitize_for_log() before logging.
-                    logger.info(
-                        "RAG context retrieved",
-                        extra={"n_docs": len(context_docs), "query": sanitize_for_log(log_line[:60])},
-                    )
-            except Exception as rag_exc:
-                logger.warning("RAG search failed", extra={"error": str(rag_exc)})
+            context_docs = await _retrieve_rag_context(log_line)
 
-        prompt = build_prompt_json(log_line, error_level, context_docs=context_docs) if structured else build_prompt(log_line, error_level)
-
-        payload = {
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "top_p": 0.9,
-                "num_ctx": 1536,
-                "num_predict": 200,
-            },
-        }
-        if structured:
-            # Ollama supports JSON mode for models that can follow structured output.
-            payload["format"] = "json"
+        prompt = (
+            build_prompt_json(log_line, error_level, context_docs=context_docs)
+            if structured
+            else build_prompt(log_line, error_level)
+        )
+        payload = _build_payload(prompt, structured)
 
         try:
             start_time = time.perf_counter()
@@ -192,29 +245,17 @@ async def analyze_with_ollama(
             }
 
         except httpx.ConnectError as e:
-            msg = "Ollama non disponible. Lance : ollama serve"
-            logger.error(msg)
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR, msg)
-            return {"success": False, "analysis": None, "raw_response": None, "error": msg}
+            return _handle_ollama_exception(span, e, ERR_OLLAMA_UNAVAILABLE)
         except httpx.TimeoutException as e:
-            msg = f"Ollama timeout ({OLLAMA_TIMEOUT}s depasse)"
-            logger.error(msg)
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR, msg)
-            return {"success": False, "analysis": None, "raw_response": None, "error": msg}
+            return _handle_ollama_exception(span, e, f"Ollama timeout ({OLLAMA_TIMEOUT}s depasse)")
         except httpx.HTTPStatusError as e:
-            msg = f"Erreur HTTP {e.response.status_code} : {e.response.text}"
-            logger.error(msg)
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR, msg)
-            return {"success": False, "analysis": None, "raw_response": None, "error": msg}
+            return _handle_ollama_exception(
+                span, e, f"Erreur HTTP {e.response.status_code} : {e.response.text}"
+            )
         except Exception as e:
-            msg = f"Erreur inattendue : {str(e)}"
-            logger.exception(msg)
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR, msg)
-            return {"success": False, "analysis": None, "raw_response": None, "error": msg}
+            return _handle_ollama_exception(
+                span, e, f"Erreur inattendue : {str(e)}", log_full_exception=True
+            )
 
 
 def _strip_markdown_fence(value: str) -> str:
@@ -384,7 +425,7 @@ Reponds en francais, sans introduction ni conclusion superflue."""
         OLLAMA_REQUEST_DURATION.observe(duration)
         return response.json().get("response", "").strip()
     except httpx.ConnectError:
-        return "Ollama non disponible. Lance : ollama serve"
+        return ERR_OLLAMA_UNAVAILABLE
     except httpx.TimeoutException:
         return f"Ollama timeout ({OLLAMA_TIMEOUT}s depasse)"
     except Exception as e:
