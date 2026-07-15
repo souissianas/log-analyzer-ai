@@ -546,11 +546,13 @@ body {
   margin-left: 6px;
 }
 
+/* Fond/bordure rendus opaques (au lieu de rgba(239,68,68,...)) pour un ratio
+   de contraste calculable et conforme WCAG AA — voir note en tête de fichier. */
 .alert-error {
   margin-top: 16px;
   padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: #3a1414;
+  border: 1px solid #5c1f1f;
   border-radius: 8px;
   color: #fca5a5;
   font-size: 0.9rem;
@@ -920,11 +922,13 @@ body {
   line-height: 1.45;
 }
 
+/* Fond/bordure rendus opaques (au lieu de rgba(239,68,68,...)) pour un ratio
+   de contraste calculable et conforme WCAG AA — voir note en tête de fichier. */
 .login-error {
   margin-bottom: 16px;
   padding: 10px 14px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: #3a1414;
+  border: 1px solid #5c1f1f;
   border-radius: 8px;
   color: #fca5a5;
   font-size: 0.875rem;
@@ -970,9 +974,12 @@ body {
   cursor: pointer;
 }
 
+/* Dégradé assombri (au lieu de var(--accent), #6366f1) pour garantir un
+   contraste >= 4.5:1 avec le texte blanc à chaque point du dégradé —
+   voir note en tête de fichier sur ce pattern. */
 .btn-primary {
   padding: 11px 16px;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1129,11 +1136,13 @@ body {
   background-clip: text;
 }
 
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.15)) pour un contraste
+   calculable de façon fiable — voir note en tête de fichier sur ce pattern. */
 .brand-version-badge {
   font-size: 0.65rem;
   font-weight: 800;
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background: #1c3654;
+  color: #93c5fd;
   padding: 2px 6px;
   border-radius: 6px;
   text-transform: uppercase;
@@ -1172,9 +1181,11 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.1)) — voir note en tête
+   de fichier sur ce pattern. */
 .nav-tab.active {
   color: #fff;
-  background: rgba(59, 130, 246, 0.1);
+  background: #1c3654;
   border: 1px solid rgba(59, 130, 246, 0.15);
 }
 
@@ -1244,10 +1255,12 @@ body {
   background: rgba(59, 130, 246, 0.05);
 }
 
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.15)) — voir note en tête
+   de fichier sur ce pattern. */
 .btn-nav-toggle.active {
   border-color: var(--accent);
   color: #fff;
-  background: rgba(59, 130, 246, 0.15);
+  background: #1c3654;
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
 }
 
@@ -1269,11 +1282,13 @@ body {
   background: var(--surface-2);
 }
 
+/* Dégradé assombri (au lieu de var(--accent), #6366f1) pour garantir un
+   contraste >= 4.5:1 avec le texte blanc — voir note en tête de fichier. */
 .user-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
   color: #fff;
   display: flex;
   align-items: center;
@@ -1798,11 +1813,14 @@ body {
   padding: 14px 16px;
   background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(99,102,241,0.06));
 }
+
+/* Dégradé assombri (au lieu de var(--accent), #6366f1) pour garantir un
+   contraste >= 4.5:1 avec le texte blanc — voir note en tête de fichier. */
 .profile-dropdown-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
   color: #fff;
   display: flex;
   align-items: center;
@@ -1981,9 +1999,11 @@ body {
   align-items: center;
   gap: 16px;
 }
+/* Dégradé assombri (au lieu de var(--accent), #6366f1) pour garantir un
+   contraste >= 4.5:1 avec le texte blanc — voir note en tête de fichier. */
 .dash-header-icon {
   font-size: 1.8rem;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
   width: 50px;
   height: 50px;
   display: flex;
@@ -2405,16 +2425,18 @@ body.theme-light .dash-table td {
   gap: 16px;
 }
 
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.18)/rgba(99,102,241,0.14))
+   et texte éclairci — voir note en tête de fichier sur ce pattern. */
 .history-page-icon {
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.14));
+  background: linear-gradient(135deg, #1c3654, #24305c);
   border: 1px solid rgba(59,130,246,0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #60a5fa;
+  color: #93c5fd;
   flex-shrink: 0;
   box-shadow: 0 8px 24px rgba(59,130,246,0.12);
 }
@@ -2754,16 +2776,18 @@ body.theme-light .dash-table td {
   background: rgba(255,255,255,0.025);
 }
 
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.14)/rgba(99,102,241,0.1))
+   et texte éclairci — voir note en tête de fichier sur ce pattern. */
 .history-group-file-icon {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(59,130,246,0.14), rgba(99,102,241,0.1));
+  background: linear-gradient(135deg, #1c3654, #24305c);
   border: 1px solid rgba(59,130,246,0.2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #60a5fa;
+  color: #93c5fd;
   flex-shrink: 0;
 }
 
@@ -3068,10 +3092,12 @@ body.theme-light .admin-table tr:hover td {
   border-color: #5c3f0c;
 }
 
+/* Fond/bordure rendus opaques (au lieu de rgba(16,185,129,...)) et texte
+   éclairci — voir note en tête de fichier sur ce pattern. */
 .status-active {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.25);
+  background: #0f3d2e;
+  color: #34d399;
+  border-color: #1a5c45;
 }
 
 /* Fond/bordure rendus opaques (au lieu de rgba(239,68,68,...)) — voir note
@@ -3132,10 +3158,12 @@ body.theme-light .admin-table tr:hover td {
   transform: none;
 }
 
+/* Fond rendu opaque (au lieu de rgba(16,185,129,0.15)) et texte éclairci —
+   voir note en tête de fichier sur ce pattern. */
 .btn-approve:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: #0f3d2e;
   border-color: #10b981;
-  color: #10b981;
+  color: #34d399;
 }
 
 .btn-reject:hover {
@@ -3176,8 +3204,10 @@ body.theme-light .admin-table tr:hover td {
   border: 1px solid #2a4d78;
 }
 
+/* Fond/bordure rendus opaques (au lieu de rgba(148,163,184,...)) et texte
+   éclairci — voir note en tête de fichier sur ce pattern. */
 .user-role-badge.role-viewer {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #2a3444;
+  color: #cbd5e1;
+  border: 1px solid #3d4a5c;
 }
