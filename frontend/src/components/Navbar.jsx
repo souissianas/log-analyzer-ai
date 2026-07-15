@@ -2,27 +2,40 @@ import { useState, useRef, useEffect } from 'react'
 
 // Composant extrait pour éviter d'imbriquer onClick -> setNotifications -> map
 // à plus de 4 niveaux de profondeur (code smell SonarCloud corrigé)
+//
+// Smell "Non-interactive elements should not be assigned interactive roles" :
+// le <li role="button" tabIndex={0} onKeyDown=...> imitait un bouton à la
+// main. Un <li> n'a aucune sémantique interactive et un <li> imbriqué dans
+// un <button> est une imbrication HTML valide (contrairement à un <button>
+// dans un <button>), donc on met simplement un vrai <button> à l'intérieur :
+// il gère Entrée/Espace/focus nativement, plus besoin de handleKeyDown.
 function NotificationItem({ notification, onRead }) {
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      onRead(notification.id)
-    }
-  }
-
   return (
-    <li
-      className={`notif-item ${notification.read ? '' : 'unread'}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => onRead(notification.id)}
-      onKeyDown={handleKeyDown}
-    >
-      <div className="notif-icon">✅</div>
-      <div className="notif-content">
-        <span className="notif-text">{notification.text}</span>
-        <span className="notif-time">{notification.time}</span>
-      </div>
+    <li className={`notif-item ${notification.read ? '' : 'unread'}`}>
+      <button
+        type="button"
+        className="notif-item-trigger"
+        onClick={() => onRead(notification.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          width: '100%',
+          textAlign: 'left',
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          font: 'inherit',
+          color: 'inherit',
+          cursor: 'pointer',
+        }}
+      >
+        <div className="notif-icon">✅</div>
+        <div className="notif-content">
+          <span className="notif-text">{notification.text}</span>
+          <span className="notif-time">{notification.time}</span>
+        </div>
+      </button>
     </li>
   )
 }
