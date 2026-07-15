@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 
 const LanguageContext = createContext()
 
@@ -39,7 +39,7 @@ const translations = {
     roleDescAdmin: 'Accès Administrateur : Vous possédez tous les droits d\'administration, y compris l\'analyse de logs, l\'export PDF, la réanalyse et la suppression des entrées d\'historique.',
     roleDescAnalyst: 'Accès Analyste : Vous pouvez téléverser des fichiers de logs pour analyse, réanalyser les logs existants et exporter les rapports au format PDF.',
     roleDescViewer: 'Accès Lecteur : Vous avez des permissions de lecture seule. Vous pouvez consulter l\'historique et les détails des analyses existantes.',
-    
+
     settingsTitle: 'Paramètres',
     settingsTheme: 'Thème d\'affichage',
     settingsThemeDesc: 'Basculez entre le mode sombre et le mode clair',
@@ -199,7 +199,7 @@ const translations = {
     roleDescAdmin: 'Admin Access: You possess all administrative rights, including log analysis, PDF export, re-analysis, and history deletion.',
     roleDescAnalyst: 'Analyst Access: You can upload log files for analysis, re-analyze existing logs, and export PDF reports.',
     roleDescViewer: 'Viewer Access: You have read-only permissions. You can view the history list and details of existing analyses.',
-    
+
     settingsTitle: 'Settings',
     settingsTheme: 'Theme Mode',
     settingsThemeDesc: 'Toggle between dark and light themes',
@@ -334,19 +334,24 @@ export function LanguageProvider({ children }) {
     localStorage.setItem('lang', language)
   }, [language])
 
-  const t = (key, params = {}) => {
+  const t = useCallback((key, params = {}) => {
     const dict = translations[language] || translations.fr
     let text = dict[key] || translations.fr[key] || key
-    
+
     Object.entries(params).forEach(([k, v]) => {
       text = text.replace(`{${k}}`, v)
     })
-    
+
     return text
-  }
+  }, [language])
+
+  const value = useMemo(
+    () => ({ language, setLanguage, t }),
+    [language, t]
+  )
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   )
