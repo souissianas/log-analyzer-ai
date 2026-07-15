@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { useTranslation } from '../i18n'
 
+function formatSize(bytes) {
+  if (!bytes) return '0 Ko'
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} Ko`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+}
+
 export default function LogUploader({ onAnalyze, disabled, role }) {
   const { t } = useTranslation()
   const [file, setFile] = useState(null)
   const [validationError, setValidationError] = useState(null)
   const isViewer = role === 'viewer'
-
-  function formatSize(bytes) {
-    if (!bytes) return '0 Ko'
-    if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} Ko`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
-  }
 
   function selectFile(nextFile) {
     setValidationError(null)
@@ -47,6 +47,36 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
     onAnalyze(file)
   }
 
+  // Smell "Extract this nested ternary operation into an independent
+  // statement" : chaque libellé conditionnel (titre de la zone de dépôt,
+  // description, libellé du bouton) est calculé à part plutôt qu'en JSX.
+  let dropZoneTitle
+  if (isViewer) {
+    dropZoneTitle = t('uploaderViewerTitle')
+  } else if (file) {
+    dropZoneTitle = file.name
+  } else {
+    dropZoneTitle = t('uploaderDropText')
+  }
+
+  let dropZoneMeta
+  if (isViewer) {
+    dropZoneMeta = t('uploaderViewerDesc')
+  } else if (file) {
+    dropZoneMeta = t('uploaderReadyText', { name: formatSize(file.size) })
+  } else {
+    dropZoneMeta = t('uploaderClickText')
+  }
+
+  let submitLabel
+  if (isViewer) {
+    submitLabel = t('uploaderRoleViewerLabel')
+  } else if (disabled) {
+    submitLabel = t('uploaderBtnLoading')
+  } else {
+    submitLabel = t('uploaderBtnAnalyze')
+  }
+
   return (
     <section className="upload-card">
       <h2>{t('uploaderTitle')}</h2>
@@ -58,14 +88,8 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
         >
-          <span className="drop-zone-title">
-            {isViewer ? t('uploaderViewerTitle') : (file ? file.name : t('uploaderDropText'))}
-          </span>
-          <span className="drop-zone-meta">
-            {isViewer 
-              ? t('uploaderViewerDesc') 
-              : (file ? t('uploaderReadyText', { name: formatSize(file.size) }) : t('uploaderClickText'))}
-          </span>
+          <span className="drop-zone-title">{dropZoneTitle}</span>
+          <span className="drop-zone-meta">{dropZoneMeta}</span>
         </label>
 
         <input
@@ -142,7 +166,7 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
         {validationError && <p className="form-error">{validationError}</p>}
 
         <button type="submit" disabled={!file || disabled || isViewer}>
-          {isViewer ? t('uploaderRoleViewerLabel') : (disabled ? t('uploaderBtnLoading') : t('uploaderBtnAnalyze'))}
+          {submitLabel}
         </button>
       </form>
 
