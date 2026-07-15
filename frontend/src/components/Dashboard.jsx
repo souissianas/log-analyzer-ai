@@ -36,7 +36,8 @@ function DonutChart({ data, title }) {
   let cumulative = 0
   const segments = data.map((d, i) => {
     const pct = total > 0 ? (d.count / total) * 100 : 0
-    const seg = { ...d, pct, color: palette[i % palette.length], offset: cumulative }
+    const key = d.category || d.level || d.name || `segment-${i}`
+    const seg = { ...d, pct, color: palette[i % palette.length], offset: cumulative, key }
     cumulative += pct
     return seg
   })
@@ -51,9 +52,9 @@ function DonutChart({ data, title }) {
       <div className="dash-donut-wrapper">
         <svg viewBox="0 0 100 100" className="dash-donut-svg">
           <circle cx="50" cy="50" r={r} fill="none" stroke="var(--surface-2)" strokeWidth="14" />
-          {segments.map((s, i) => (
+          {segments.map((s) => (
             <circle
-              key={i}
+              key={s.key}
               cx="50" cy="50" r={r}
               fill="none"
               stroke={s.color}
@@ -68,8 +69,8 @@ function DonutChart({ data, title }) {
           <text x="50" y="58" textAnchor="middle" fill="var(--muted)" fontSize="6">total</text>
         </svg>
         <div className="dash-donut-legend">
-          {segments.map((s, i) => (
-            <div key={i} className="dash-legend-row">
+          {segments.map((s) => (
+            <div key={s.key} className="dash-legend-row">
               <span className="dash-legend-dot" style={{ background: s.color }} />
               <span className="dash-legend-label">{s.category || s.level || s.name}</span>
               <span className="dash-legend-count">{s.count}</span>
@@ -100,8 +101,9 @@ function BarChart({ data, title, barKey = 'count', labelKey = 'day', colorKey })
         {data.map((d, i) => {
           const pct = ((d[barKey] || 0) / maxVal) * 100
           const label = String(d[labelKey] || '').slice(-5) // last 5 chars for date (MM-DD)
+          const rowKey = d[labelKey] || `bar-${i}`
           return (
-            <div key={i} className="dash-bar-col">
+            <div key={rowKey} className="dash-bar-col">
               <div className="dash-bar-val">{d[barKey] || 0}</div>
               <div className="dash-bar-track">
                 <div
@@ -151,7 +153,7 @@ function TopFilesTable({ data }) {
           </thead>
           <tbody>
             {data.map((f, i) => (
-              <tr key={i}>
+              <tr key={f.filename}>
                 <td className="dash-table-rank">{i + 1}</td>
                 <td className="dash-table-filename" title={f.filename}>
                   📄 {f.filename.length > 28 ? '…' + f.filename.slice(-25) : f.filename}
