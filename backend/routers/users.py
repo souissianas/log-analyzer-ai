@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core.security import require_role
@@ -25,10 +25,13 @@ class RoleUpdate(BaseModel):
 
 
 @router.get("")
-async def list_users(current_user: dict = Depends(require_role(["admin"]))):
+async def list_users(
+    current_user: Annotated[dict, Depends(require_role(["admin"]))],
+):
     """Liste tous les utilisateurs du tenant de l'admin connecté."""
     tenant_id = current_user.get("tenant_id")
     users = storage.list_users(tenant_id=tenant_id)
+
     # Don't expose hashed_password
     return [
         {
@@ -46,15 +49,22 @@ async def list_users(current_user: dict = Depends(require_role(["admin"]))):
 @router.patch(
     "/{user_id}/status",
     responses={
-        400: {"description": "Statut invalide ou mise à jour impossible, ou tentative de modification de son propre statut."},
-        403: {"description": "Utilisateur hors du tenant de l'admin connecté."},
+        400: {
+            "description": (
+                "Statut invalide ou mise à jour impossible, "
+                "ou tentative de modification de son propre statut."
+            )
+        },
+        403: {
+            "description": "Utilisateur hors du tenant de l'admin connecté."
+        },
         404: {"description": "Utilisateur introuvable."},
     },
 )
 async def update_user_status(
     user_id: int,
     payload: StatusUpdate,
-    current_user: dict = Depends(require_role(["admin"])),
+    current_user: Annotated[dict, Depends(require_role(["admin"]))],
 ):
     """Active ou rejette un compte utilisateur."""
     if payload.status not in ("pending", "active", "rejected"):
@@ -63,37 +73,52 @@ async def update_user_status(
             detail="Statut invalide. Valeurs acceptées : pending, active, rejected",
         )
 
-    # Prevent admin from deactivating themselves
     if user_id == current_user.get("user_id"):
-        raise HTTPException(status_code=400, detail="Vous ne pouvez pas modifier votre propre statut.")
+        raise HTTPException(
+            status_code=400,
+            detail="Vous ne pouvez pas modifier votre propre statut.",
+        )
 
     target_user = storage.get_user_by_id(user_id)
     if not target_user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    # Tenant isolation: admin can only manage users in their own tenant
     if target_user.get("tenant_id") != current_user.get("tenant_id"):
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     success = storage.update_user_status(user_id, payload.status)
     if not success:
-        raise HTTPException(status_code=400, detail="Mise à jour du statut échouée.")
+        raise HTTPException(
+            status_code=400,
+            detail="Mise à jour du statut échouée.",
+        )
 
-    return {"success": True, "user_id": user_id, "status": payload.status}
+    return {
+        "success": True,
+        "user_id": user_id,
+        "status": payload.status,
+    }
 
 
 @router.patch(
     "/{user_id}/role",
     responses={
-        400: {"description": "Rôle invalide ou mise à jour impossible, ou tentative de modification de son propre rôle."},
-        403: {"description": "Utilisateur hors du tenant de l'admin connecté."},
+        400: {
+            "description": (
+                "Rôle invalide ou mise à jour impossible, "
+                "ou tentative de modification de son propre rôle."
+            )
+        },
+        403: {
+            "description": "Utilisateur hors du tenant de l'admin connecté."
+        },
         404: {"description": "Utilisateur introuvable."},
     },
 )
 async def update_user_role(
     user_id: int,
     payload: RoleUpdate,
-    current_user: dict = Depends(require_role(["admin"])),
+    current_user: Annotated[dict, Depends(require_role(["admin"]))],
 ):
     """Modifie le rôle d'un utilisateur."""
     if payload.role not in ("admin", "analyst", "viewer"):
@@ -103,7 +128,10 @@ async def update_user_role(
         )
 
     if user_id == current_user.get("user_id"):
-        raise HTTPException(status_code=400, detail="Vous ne pouvez pas modifier votre propre rôle.")
+        raise HTTPException(
+            status_code=400,
+            detail="Vous ne pouvez pas modifier votre propre rôle.",
+        )
 
     target_user = storage.get_user_by_id(user_id)
     if not target_user:
@@ -114,26 +142,40 @@ async def update_user_role(
 
     success = storage.update_user_role(user_id, payload.role)
     if not success:
-        raise HTTPException(status_code=400, detail="Mise à jour du rôle échouée.")
+        raise HTTPException(
+            status_code=400,
+            detail="Mise à jour du rôle échouée.",
+        )
 
-    return {"success": True, "user_id": user_id, "role": payload.role}
+    return {
+        "success": True,
+        "user_id": user_id,
+        "role": payload.role,
+    }
 
 
 @router.delete(
     "/{user_id}",
     responses={
-        400: {"description": "Tentative de suppression de son propre compte."},
-        403: {"description": "Utilisateur hors du tenant de l'admin connecté."},
+        400: {
+            "description": "Tentative de suppression de son propre compte."
+        },
+        403: {
+            "description": "Utilisateur hors du tenant de l'admin connecté."
+        },
         404: {"description": "Utilisateur introuvable."},
     },
 )
 async def delete_user(
     user_id: int,
-    current_user: dict = Depends(require_role(["admin"])),
+    current_user: Annotated[dict, Depends(require_role(["admin"]))],
 ):
     """Supprime un utilisateur du tenant."""
     if user_id == current_user.get("user_id"):
-        raise HTTPException(status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte.")
+        raise HTTPException(
+            status_code=400,
+            detail="Vous ne pouvez pas supprimer votre propre compte.",
+        )
 
     target_user = storage.get_user_by_id(user_id)
     if not target_user:
@@ -143,4 +185,9 @@ async def delete_user(
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     storage.delete_user(user_id)
-    return {"success": True, "user_id": user_id, "deleted": True}
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "deleted": True,
+    }
