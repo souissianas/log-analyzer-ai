@@ -1,4 +1,5 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -16,11 +17,13 @@ stats_router = APIRouter(prefix="/stats", tags=["stats"])
 
 ANALYSE_NOT_FOUND = "Analyse introuvable"
 
+# Reusable annotated dependency: fixes the SonarQube "Use Annotated type hints
+# for FastAPI dependency injection" code smell everywhere current_user is used.
+CurrentUser = Annotated[dict, Depends(get_current_user_or_api_key)]
+
 
 @stats_router.get("/dashboard")
-def get_dashboard_stats(
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+def get_dashboard_stats(current_user: CurrentUser):
     """Retourne les statistiques globales pour le dashboard."""
     tenant_id = current_user.get("tenant_id")
     return storage.get_dashboard_stats(tenant_id=tenant_id)
@@ -28,9 +31,9 @@ def get_dashboard_stats(
 
 @router.get("", response_model=AnalysisListResponse)
 def list_saved_analyses(
+    current_user: CurrentUser,
     limit: int = 50,
     offset: int = 0,
-    current_user: dict = Depends(get_current_user_or_api_key),
 ):
     tenant_id = current_user.get("tenant_id")
     items = storage.list_analyses(limit=limit, offset=offset, tenant_id=tenant_id)
@@ -48,10 +51,7 @@ def list_saved_analyses(
         404: {"description": ANALYSE_NOT_FOUND},
     },
 )
-def get_saved_analysis(
-    log_id: int,
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+def get_saved_analysis(log_id: int, current_user: CurrentUser):
     tenant_id = current_user.get("tenant_id")
     item = storage.get_analysis(log_id, tenant_id=tenant_id)
     if not item:
@@ -66,10 +66,7 @@ def get_saved_analysis(
         404: {"description": ANALYSE_NOT_FOUND},
     },
 )
-def export_analysis_pdf(
-    log_id: int,
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+def export_analysis_pdf(log_id: int, current_user: CurrentUser):
     if current_user.get("role") not in ("admin", "analyst"):
         raise HTTPException(status_code=403, detail="Droit insuffisant pour exporter les analyses")
 
@@ -95,8 +92,8 @@ def export_analysis_pdf(
 )
 async def reanalyze_saved(
     log_id: int,
+    current_user: CurrentUser,
     max_errors: int = 5,
-    current_user: dict = Depends(get_current_user_or_api_key),
 ):
     if current_user.get("role") not in ("admin", "analyst"):
         raise HTTPException(status_code=403, detail="Droit insuffisant pour relancer l'analyse")
