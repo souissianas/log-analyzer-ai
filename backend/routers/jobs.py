@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -24,6 +25,11 @@ from core.upload import decode_upload, read_upload_with_limit, validate_log_exte
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+# Reusable annotated dependency: avoids repeating Depends(...) at every endpoint
+# and fixes the SonarQube "Use Annotated type hints for FastAPI dependency
+# injection" code smell.
+CurrentUser = Annotated[dict, Depends(get_current_user_or_api_key)]
 
 
 def _get_celery():
@@ -44,9 +50,9 @@ def _get_celery():
     },
 )
 async def submit_analysis_job(
-    file: UploadFile = File(...),
+    current_user: CurrentUser,
+    file: Annotated[UploadFile, File(...)],
     max_errors: int = 5,
-    current_user: dict = Depends(get_current_user_or_api_key),
 ):
     """
     Upload a log file. Returns a job_id immediately.
@@ -88,10 +94,7 @@ async def submit_analysis_job(
         404: {"description": "Job introuvable ou expiré"},
     },
 )
-def get_job_status(
-    job_id: str,
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+def get_job_status(job_id: str, current_user: CurrentUser):
     """Returns current status + progress counter. Safe to poll every second."""
     job = get_job(job_id)
     if job is None:
@@ -109,10 +112,7 @@ def get_job_status(
 
 
 @router.get("/{job_id}/stream", summary="Server-Sent Events progress stream")
-async def stream_job_progress(
-    job_id: str,
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+async def stream_job_progress(job_id: str, current_user: CurrentUser):
     """
     SSE endpoint.  The client receives events as the worker progresses:
       - data: {"status":"running","current":1,"total":5}
@@ -164,10 +164,7 @@ async def stream_job_progress(
         409: {"description": "Job pas encore terminé"},
     },
 )
-def get_job_result(
-    job_id: str,
-    current_user: dict = Depends(get_current_user_or_api_key),
-):
+def get_job_result(job_id: str, current_user: CurrentUser):
     """Returns the complete analysis payload once the job is done."""
     job = get_job(job_id)
     if job is None:
