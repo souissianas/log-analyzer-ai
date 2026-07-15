@@ -388,13 +388,25 @@ def _get_analysis_sqlite(analysis_id: int, tenant_id: Optional[int]) -> Optional
     conn.close()
     if not row:
         return None
+
+    # Smell "Extract this nested conditional expression into an independent
+    # statement" : la double ternaire imbriquée (dict / JSON valide / vide)
+    # est remontée en un if/elif/else lisible avant la construction du dict.
+    raw_data = row[5]
+    if isinstance(raw_data, dict):
+        data = raw_data
+    elif raw_data:
+        data = json.loads(raw_data)
+    else:
+        data = None
+
     return {
         "id": row[0],
         "filename": row[1],
         "created_at": row[2],
         "total_errors_found": row[3],
         "total_analyzed": row[4],
-        "data": row[5] if isinstance(row[5], dict) else (json.loads(row[5]) if row[5] else None),
+        "data": data,
     }
 
 
@@ -452,7 +464,7 @@ def list_analyses(limit: int = 100, offset: int = 0, tenant_id: Optional[int] = 
     return results
 
 
-def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
+def migrate_sqlite_to_postgres() -> Dict:
     """Migre les données SQLite vers PostgreSQL si PostgreSQL est configuré."""
     if not _is_postgres():
         raise RuntimeError("PostgreSQL n'est pas configuré ou psycopg2 n'est pas installé.")
@@ -483,7 +495,6 @@ def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
             "data": json.loads(row[5]) if row[5] else None,
         }
 
-        # TODO: gérer overwrite=True si nécessaire
         query = (
             "INSERT INTO analyses "
             "(filename, created_at, total_errors_found, total_analyzed, data) "
@@ -628,7 +639,7 @@ def get_tenant_by_slug(slug: str) -> Optional[Dict]:
     return None
 
 
-def create_tenant(name: str, slug: str, plan: str = "free") -> int:
+def create_tenant(name: str, slug: str) -> int:
     if _is_postgres():
         query = "INSERT INTO tenants (name, slug) VALUES (%s, %s) RETURNING id"
         with _get_postgres_connection() as conn:
