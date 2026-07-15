@@ -16,7 +16,6 @@ import secrets
 import time
 from schemas.auth import UserRegister, UserLogin, Token, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
 from services import storage
-from services.whatsapp_service import send_whatsapp_message
 from services.email_service import send_email
 
 logger = logging.getLogger(__name__)
@@ -319,7 +318,7 @@ async def refresh(payload: RefreshRequest):
     },
 )
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
-    """Génère un OTP à 6 chiffres et l'envoie via WhatsApp si disponible."""
+    """Génère un OTP à 6 chiffres et l'envoie par email si disponible."""
     email = body.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
     # Rate limit by IP: max 10 requests per 15 minutes
@@ -374,19 +373,8 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
             logger.info(f"[PASSWORD RESET] Email envoyé à {email}")
     except Exception as exc:
         logger.warning(f"[PASSWORD RESET] Erreur d'envoi d'email SMTP: {exc}")
-    # Try to send via WhatsApp
-    whatsapp_sent = False
-    try:
-        whatsapp_sent = await send_whatsapp_message(
-            f"Votre code de réinitialisation Log Analyzer AI est : {code}\n"
-            f"Il expire dans 10 minutes."
-        )
-        if whatsapp_sent:
-            logger.info(f"[PASSWORD RESET] WhatsApp envoyé à {email}")
-    except Exception as exc:
-        logger.warning(f"[PASSWORD RESET] Erreur WhatsApp: {exc}")
-    if not email_sent and not whatsapp_sent:
-        logger.warning("[PASSWORD RESET] Aucun canal (Email/WhatsApp) disponible, code visible uniquement dans les logs.")
+    if not email_sent:
+        logger.warning("[PASSWORD RESET] Email non disponible, code visible uniquement dans les logs.")
     return {"message": "Si cet email existe, un code a été envoyé."}
 
 

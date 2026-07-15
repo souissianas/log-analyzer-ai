@@ -47,36 +47,6 @@ class Settings:
         return os.environ.get("JWT_ALGORITHM", "HS256")
 
     @property
-    def twilio_account_sid(self) -> str | None:
-        val = os.environ.get("TWILIO_ACCOUNT_SID")
-        return val.strip() if val else None
-
-    @property
-    def twilio_auth_token(self) -> str | None:
-        val = os.environ.get("TWILIO_AUTH_TOKEN")
-        return val.strip() if val else None
-
-    @property
-    def twilio_from_whatsapp(self) -> str | None:
-        val = os.environ.get("TWILIO_FROM_WHATSAPP")
-        if not val:
-            return None
-        val = val.strip()
-        if not val.startswith("whatsapp:"):
-            return f"whatsapp:{val}"
-        return val
-
-    @property
-    def twilio_to_whatsapp(self) -> str | None:
-        val = os.environ.get("TWILIO_TO_WHATSAPP")
-        if not val:
-            return None
-        val = val.strip()
-        if not val.startswith("whatsapp:"):
-            return f"whatsapp:{val}"
-        return val
-
-    @property
     def smtp_host(self) -> str | None:
         val = os.environ.get("SMTP_HOST")
         return val.strip() if val else None
@@ -106,16 +76,6 @@ class Settings:
     @property
     def smtp_enabled(self) -> bool:
         return bool(self.smtp_host and self.smtp_sender)
-
-    @property
-    def whatsapp_enabled(self) -> bool:
-        return bool(
-            self.twilio_account_sid
-            and self.twilio_auth_token
-            and self.twilio_from_whatsapp
-            and self.twilio_to_whatsapp
-        )
-
 
 
 @lru_cache

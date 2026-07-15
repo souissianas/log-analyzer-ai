@@ -192,17 +192,6 @@ def _save_analysis_safe(result_payload: dict, tenant_id, user_id):
         return None
 
 
-def _notify_whatsapp_safe(filename: str, entries: list):
-    """Déclenche la notification WhatsApp ; ne propage jamais l'exception (best-effort)."""
-    if not entries:
-        return
-    try:
-        from services.whatsapp_service import send_whatsapp_notification
-        error_levels = [entry.level for entry in entries]
-        _run_async(send_whatsapp_notification(filename, len(entries), error_levels))
-    except Exception:
-        logger.exception("Failed to trigger WhatsApp notification")
-
 
 # ── Task Celery ────────────────────────────────────────────────────────────────
 
@@ -245,7 +234,6 @@ def analyze_file_task(
         }
 
         log_id = _save_analysis_safe(result_payload, tenant_id, user_id)
-        _notify_whatsapp_safe(filename, entries)
 
         update_job(job_id, status="done", result=result_payload, log_id=log_id)
         return result_payload

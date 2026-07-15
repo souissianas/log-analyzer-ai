@@ -84,7 +84,7 @@ export default function LoginPage({ onLoginSuccess }) {
     try {
       await forgotPassword(forgotEmail)
       setInfoMessage(
-        'Un code à 6 chiffres a été envoyé via WhatsApp (ou est visible dans les logs du serveur). Entrez-le ci-dessous.'
+        'Un code à 6 chiffres a été envoyé par email (ou est visible dans les logs du serveur si le SMTP n\'est pas configuré). Entrez-le ci-dessous.'
       )
       switchView('reset')
     } catch (err) {
@@ -119,7 +119,7 @@ export default function LoginPage({ onLoginSuccess }) {
   const renderForgotForm = () => (
     <form onSubmit={handleForgotSubmit} className="login-form">
       <p className="forgot-desc">
-        Entrez votre adresse email. Vous recevrez un code à 6 chiffres par WhatsApp.
+        Entrez votre adresse email. Vous recevrez un code à 6 chiffres par email.
       </p>
       <div className="form-group">
         <label htmlFor="forgot-email">Adresse email</label>

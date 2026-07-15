@@ -18,4 +18,3 @@ Ce dossier contient les scripts de test et de validation manuelle du backend.
 - `test_semaine6_structured_explanations.py` : Tests pour la structuration de l'explication
 - `test_semaine8_smoke.py` : Smoke test de la semaine 8
 - `test_upload.py` : Vérification du endpoint d'upload
-- `test_whatsapp.py` : Validation de l'intégration avec Twilio/WhatsApp

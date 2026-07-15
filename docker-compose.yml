@@ -111,10 +111,6 @@ services:
       CHROMADB_HOST: chromadb
       CHROMADB_PORT: 8000
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
-      TWILIO_TO_WHATSAPP: ${TWILIO_TO_WHATSAPP:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -149,10 +145,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       CHROMADB_HOST: chromadb
       CHROMADB_PORT: 8000
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
-      TWILIO_TO_WHATSAPP: ${TWILIO_TO_WHATSAPP:-}
     command: celery -A worker worker --loglevel=info --concurrency=2 -Q analysis
     restart: unless-stopped
 
