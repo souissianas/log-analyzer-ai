@@ -74,7 +74,7 @@ def get_tracer(name: str = "log-analyzer"):
 class _NoopTracer:
     """Minimal no-op tracer used when OTel is not initialised."""
 
-    def start_as_current_span(self, name, **_):  # noqa: ANN001
+    def start_as_current_span(self, _name, **_):  # noqa: ANN001
         from contextlib import contextmanager
 
         @contextmanager
