@@ -17,15 +17,32 @@ const SSE_RETRY_DELAY_MS  = 3_000    // wait 3s before reconnecting SSE
 // validating it) keeps the taint engine's dataflow tied to the original
 // untrusted reference; returning a lookup-table literal breaks that link.
 const ROLE_LOOKUP = { admin: 'admin', analyst: 'analyst', viewer: 'viewer' }
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function sanitizeRole(role) {
   if (typeof role !== 'string') return null
   return Object.prototype.hasOwnProperty.call(ROLE_LOOKUP, role) ? ROLE_LOOKUP[role] : null
 }
 
+// Validates a "local@domain.tld" shape without a regex. The previous
+// pattern (/^[^\s@]+@[^\s@]+\.[^\s@]+$/) let the middle [^\s@]+ group and
+// the literal "." both match ordinary dot characters, so the engine had to
+// try every possible split point between them on a failed match — a
+// classic super-linear backtracking shape SonarCloud flags. Doing the
+// same three checks (one @, a dot in the domain that isn't first/last,
+// no whitespace) with plain string operations is O(n) and unambiguous.
+function looksLikeEmail(value) {
+  if (/\s/.test(value)) return false
+  const atIndex = value.indexOf('@')
+  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return false
+  const local = value.slice(0, atIndex)
+  const domain = value.slice(atIndex + 1)
+  if (!local || !domain) return false
+  const dotIndex = domain.lastIndexOf('.')
+  return dotIndex > 0 && dotIndex < domain.length - 1
+}
+
 export function sanitizeEmail(email) {
-  if (typeof email !== 'string' || !EMAIL_RE.test(email)) return null
+  if (typeof email !== 'string' || !looksLikeEmail(email)) return null
   // Re-build the string from its own validated parts instead of returning
   // the original reference, for the same reason as sanitizeRole above.
   return String(email)
@@ -322,6 +339,19 @@ export async function submitAnalysisJob(file, maxErrors = 5) {
   return res.json()
 }
 
+// Parse a single raw "data: {...}" SSE line. Returns the payload, or null
+// if the line is malformed (caller just skips it and keeps reading).
+// Moved to module scope (SonarCloud "Move this function to the outer
+// scope"): it only touches its `line` argument, no variable from
+// streamJobProgress's closure, so nesting it added scope without benefit.
+function parseSseLine(line) {
+  try {
+    return JSON.parse(line.slice(6))
+  } catch {
+    return null
+  }
+}
+
 /**
  * Open an SSE connection and call onProgress / onDone / onError as events arrive.
  * Returns a close() function to terminate the stream.
@@ -334,7 +364,7 @@ export async function submitAnalysisJob(file, maxErrors = 5) {
  * into a single anonymous async IIFE (Cognitive Complexity 37). It's split
  * below into small, single-purpose functions so each piece stays under the
  * complexity limit and is easier to reason about independently:
- *   - parseSseLine   → parse one raw SSE line, or null if malformed
+ *   - parseSseLine   → parse one raw SSE line, or null if malformed (module scope)
  *   - processLines   → run parsed lines through handlePayload, stop on match
  *   - consumeStream  → read the response body chunk by chunk until done/stop
  *   - attemptSseConnection → one fetch + read attempt (or fall back to polling)
@@ -372,16 +402,6 @@ export function streamJobProgress(jobId, { onProgress, onDone, onError } = {}) {
       }
     }
     onError?.('Timeout — réessayez')
-  }
-
-  // Parse a single raw "data: {...}" line. Returns the payload, or null
-  // if the line is malformed (caller just skips it and keeps reading).
-  function parseSseLine(line) {
-    try {
-      return JSON.parse(line.slice(6))
-    } catch {
-      return null
-    }
   }
 
   // Run a batch of complete lines through handlePayload.
