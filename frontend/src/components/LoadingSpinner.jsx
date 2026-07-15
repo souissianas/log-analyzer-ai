@@ -1,3 +1,23 @@
+// Smell "Use <progress> instead of the 'progressbar' role" : le fond +
+// remplissage (deux <div>) reste tel quel pour le rendu visuel existant
+// (largeur en %, dépend du CSS .progress-fill), mais il devient purement
+// décoratif (aria-hidden) et un vrai <progress> natif porte désormais la
+// sémantique d'accessibilité. Le <progress> est visuellement masqué avec
+// la technique standard "visually hidden" (pas de display:none, pour
+// rester perçu par les lecteurs d'écran) plutôt que rendu à l'écran, pour
+// ne pas dupliquer visuellement la barre déjà dessinée par .progress-fill.
+const visuallyHiddenStyle = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+}
+
 export default function LoadingSpinner({ message, current, total }) {
   const hasProgress = typeof current === 'number' && typeof total === 'number' && total > 0
   const pct = hasProgress ? Math.round((current / total) * 100) : null
@@ -13,11 +33,11 @@ export default function LoadingSpinner({ message, current, total }) {
             <div
               className="progress-fill"
               style={{ width: `${pct}%` }}
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              role="progressbar"
+              aria-hidden="true"
             />
+            <progress value={current} max={total} style={visuallyHiddenStyle}>
+              {pct}%
+            </progress>
           </div>
           <p className="progress-label">
             {current} / {total} erreurs analysées ({pct}%)
