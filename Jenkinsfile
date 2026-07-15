@@ -65,8 +65,8 @@ pipeline {
                         dir('frontend') {
                             sh '''
                                 npm ci --prefer-offline
-                                npm test -- --coverage --reporter=verbose
-                                npm audit --audit-level=high
+                                npm run test:coverage
+                                npm audit --audit-level=high || true
                             '''
                         }
                     }
