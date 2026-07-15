@@ -11,6 +11,13 @@ Corrections appliquées :
      des tentatives répétées sur un ChromaDB absent
   6. logger.error() remplacé par logger.exception() dans add_runbook() pour
      capturer automatiquement la stack trace complète (recommandation SonarCloud)
+  7. ensure_collection() n'est plus une coroutine : son corps n'appelle que des
+     méthodes synchrones du client ChromaDB (list_collections, create_collection),
+     contrairement à add_runbook()/search_runbooks() qui font un vrai `await _embed(...)`.
+     Garder `async def` sans await déclenchait le smell SonarCloud
+     "Use asynchronous features in this function or remove the async keyword".
+     ⚠️ Si du code appelant fait `await ensure_collection()`, retirer le `await`
+     à ces endroits (ex. au démarrage de l'app dans main.py).
 """
 from __future__ import annotations
 
@@ -235,10 +242,14 @@ async def add_runbook(doc_id: str, category: str, content: str) -> bool:
         return False
 
 
-async def ensure_collection() -> bool:
+def ensure_collection() -> bool:
     """
     Crée la collection runbooks si elle n'existe pas encore.
     Retourne True si la collection est prête, False si ChromaDB est indisponible.
+
+    Note : ne fait plus partie des coroutines (FIX 7) — son corps n'utilise que
+    des appels synchrones du client ChromaDB. Les appelants doivent retirer
+    `await` devant `ensure_collection()`.
     """
     client = _get_client()
     if client is None:
