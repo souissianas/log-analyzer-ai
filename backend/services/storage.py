@@ -464,8 +464,106 @@ def list_analyses(limit: int = 100, offset: int = 0, tenant_id: Optional[int] = 
     return results
 
 
-def migrate_sqlite_to_postgres() -> Dict:
-    """Migre les données SQLite vers PostgreSQL si PostgreSQL est configuré."""
+def _migrate_analyses_to_postgres(analyses_rows, overwrite: bool) -> Dict:
+    """Copie les lignes `analyses` de SQLite vers PostgreSQL en conservant les id.
+
+    Si overwrite est False, une ligne dont l'id existe déjà côté PostgreSQL
+    est simplement ignorée. Si overwrite est True, elle est écrasée.
+    """
+    conflict_clause = (
+        "ON CONFLICT (id) DO UPDATE SET "
+        "filename = EXCLUDED.filename, "
+        "created_at = EXCLUDED.created_at, "
+        "total_errors_found = EXCLUDED.total_errors_found, "
+        "total_analyzed = EXCLUDED.total_analyzed, "
+        "data = EXCLUDED.data"
+        if overwrite
+        else "ON CONFLICT (id) DO NOTHING"
+    )
+    query = (
+        "INSERT INTO analyses (id, filename, created_at, total_errors_found, total_analyzed, data) "
+        "VALUES (%s, %s, %s, %s, %s, %s) " + conflict_clause
+    )
+
+    inserted = 0
+    skipped = 0
+    with _get_postgres_connection() as pg_conn:
+        with pg_conn.cursor() as pg_cur:
+            for row in analyses_rows:
+                pg_cur.execute(
+                    query,
+                    (
+                        row["id"],
+                        row["filename"],
+                        row["created_at"],
+                        row["total_errors_found"],
+                        row["total_analyzed"],
+                        json.dumps(json.loads(row["data"]) if row["data"] else None, ensure_ascii=False),
+                    ),
+                )
+                if pg_cur.rowcount:
+                    inserted += 1
+                else:
+                    skipped += 1
+            # Réaligne la séquence SERIAL sur le plus grand id inséré, pour
+            # que les prochains save_analysis() ne re-génèrent pas un id déjà pris.
+            pg_cur.execute(
+                "SELECT setval(pg_get_serial_sequence('analyses', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM analyses), 1))"
+            )
+            pg_conn.commit()
+
+    return {"inserted": inserted, "skipped": skipped}
+
+
+def _migrate_errors_to_postgres(error_rows) -> int:
+    """Copie les lignes `analysis_errors` de SQLite vers PostgreSQL en conservant les id."""
+    if not error_rows:
+        return 0
+
+    query = (
+        "INSERT INTO analysis_errors "
+        "(id, analysis_id, line_number, level, message, category, explanation, causes, solutions, analyzed_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (id) DO NOTHING"
+    )
+    migrated = 0
+    with _get_postgres_connection() as pg_conn:
+        with pg_conn.cursor() as pg_cur:
+            for row in error_rows:
+                pg_cur.execute(
+                    query,
+                    (
+                        row["id"],
+                        row["analysis_id"],
+                        row["line_number"],
+                        row["level"],
+                        row["message"],
+                        row["category"],
+                        row["explanation"],
+                        row["causes"],
+                        row["solutions"],
+                        row["analyzed_at"],
+                    ),
+                )
+                if pg_cur.rowcount:
+                    migrated += 1
+            pg_cur.execute(
+                "SELECT setval(pg_get_serial_sequence('analysis_errors', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM analysis_errors), 1))"
+            )
+            pg_conn.commit()
+    return migrated
+
+
+def migrate_sqlite_to_postgres(overwrite: bool = False) -> Dict:
+    """Migre les données SQLite vers PostgreSQL si PostgreSQL est configuré.
+
+    Args:
+        overwrite: si True, les lignes déjà présentes côté PostgreSQL (même id)
+            sont écrasées par les données SQLite. Si False (par défaut),
+            elles sont ignorées et seules les nouvelles lignes sont insérées.
+    """
     if not _is_postgres():
         raise RuntimeError("PostgreSQL n'est pas configuré ou psycopg2 n'est pas installé.")
 
@@ -477,49 +575,30 @@ def migrate_sqlite_to_postgres() -> Dict:
     init_db()
 
     conn = _get_sqlite_connection(sqlite_path)
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+
     cur.execute(
         "SELECT id, filename, created_at, total_errors_found, total_analyzed, data FROM analyses"
     )
-    rows = cur.fetchall()
+    analyses_rows = cur.fetchall()
+
+    cur.execute(
+        "SELECT id, analysis_id, line_number, level, message, category, "
+        "explanation, causes, solutions, analyzed_at FROM analysis_errors"
+    )
+    error_rows = cur.fetchall()
     conn.close()
 
-    inserted = 0
-
-    for row in rows:
-        payload = {
-            "filename": row[1],
-            "created_at": row[2],
-            "total_errors_found": row[3],
-            "total_analyzed": row[4],
-            "data": json.loads(row[5]) if row[5] else None,
-        }
-
-        query = (
-            "INSERT INTO analyses "
-            "(filename, created_at, total_errors_found, total_analyzed, data) "
-            "VALUES (%s, %s, %s, %s, %s)"
-        )
-
-        with _get_postgres_connection() as pg_conn:
-            with pg_conn.cursor() as pg_cur:
-                pg_cur.execute(
-                    query,
-                    (
-                        payload["filename"],
-                        payload["created_at"],
-                        payload["total_errors_found"],
-                        payload["total_analyzed"],
-                        json.dumps(payload["data"], ensure_ascii=False),
-                    ),
-                )
-                pg_conn.commit()
-
-        inserted += 1
+    analyses_result = _migrate_analyses_to_postgres(analyses_rows, overwrite)
+    errors_migrated = _migrate_errors_to_postgres(error_rows)
 
     return {
-        "migrated": inserted,
-        "source_rows": len(rows),
+        "migrated": analyses_result["inserted"],
+        "skipped": analyses_result["skipped"],
+        "errors_migrated": errors_migrated,
+        "source_rows": len(analyses_rows),
+        "overwrite": overwrite,
         "destination": "postgresql",
     }
 
