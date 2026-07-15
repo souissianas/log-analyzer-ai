@@ -23,46 +23,39 @@ export function sanitizeRole(role) {
   return Object.prototype.hasOwnProperty.call(ROLE_LOOKUP, role) ? ROLE_LOOKUP[role] : null
 }
 
-// Validates a "local@domain.tld" shape without a regex, and hands back the
-// validated local/domain substrings instead of a boolean. The previous
-// email pattern (/^[^\s@]+@[^\s@]+\.[^\s@]+$/) let the middle [^\s@]+ group
-// and the literal "." both match ordinary dot characters, so the engine had
-// to try every possible split point between them on a failed match — a
-// classic super-linear backtracking shape SonarCloud flags. Doing the same
-// three checks (one @, a dot in the domain that isn't first/last, no
-// whitespace) with plain string operations is O(n) and unambiguous.
+// A previous version of this function parsed the email by slicing the
+// input string (indexOf('@'), slice(), lastIndexOf('.')) and rebuilt the
+// result from those slices. That still satisfies functional validation,
+// but SonarCloud's taint engine did NOT treat it as a sanitizer: the
+// rebuilt string is made of substrings of the original tainted value, so
+// the dataflow analysis correctly keeps tracking it as tainted — slicing
+// isn't neutralizing.
 //
-// Returning the parsed { local, domain } (rather than just true/false) is
-// what lets sanitizeEmail rebuild its result from freshly-sliced
-// substrings instead of the original tainted reference — see the comment
-// on sanitizeEmail below.
-function parseEmailParts(value) {
-  if (/\s/.test(value)) return null
-  const atIndex = value.indexOf('@')
-  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return null
-  const local = value.slice(0, atIndex)
-  const domain = value.slice(atIndex + 1)
-  if (!local || !domain) return null
-  const dotIndex = domain.lastIndexOf('.')
-  if (dotIndex <= 0 || dotIndex >= domain.length - 1) return null
-  return { local, domain }
-}
+// A bounded RegExp#test() call, gating whether the (untouched) value is
+// returned at all, is one of the sanitizer shapes SonarCloud's JS/TS rule
+// set recognizes, so this is what actually clears the finding at the sink.
+//
+// The pattern is intentionally NOT the classic
+// /^[^\s@]+@[^\s@]+\.[^\s@]+$/ — the two [^\s@]+ groups plus a literal "."
+// they can both match creates the super-linear backtracking shape Sonar's
+// ReDoS rule (S5852) flags. Every quantifier below is length-bounded and
+// the character classes don't overlap with the separators, so there's a
+// single unambiguous parse — no backtracking blow-up possible.
+const EMAIL_RE = /^[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{1,63}(?:\.[a-zA-Z0-9-]{1,63})*\.[a-zA-Z]{2,24}$/
 
 export function sanitizeEmail(email) {
-  if (typeof email !== 'string') return null
-  const parts = parseEmailParts(email)
-  if (!parts) return null
-  // Re-build the string from its own validated parts instead of returning
-  // the original reference (String(email) would just wrap the same tainted
-  // value), for the same reason as sanitizeRole above.
-  return `${parts.local}@${parts.domain}`
+  if (typeof email !== 'string' || email.length > 254) return null
+  return EMAIL_RE.test(email) ? email : null
 }
 
 // Single choke point for writing identity fields to localStorage. Every
 // caller — login, register, and the periodic refresh in syncCurrentUser —
 // goes through here, so the sanitize-then-store flow lives in one place
 // and one file, which is what keeps Sonar's dataflow analysis (and any
-// human reviewer) able to see source and sink together.
+// human reviewer) able to see source and sink together. Sanitization now
+// happens directly in this function (no intermediate parsing helper) so
+// the taint chain from parameter to localStorage.setItem is as short as
+// possible.
 function persistIdentity({ role, email } = {}) {
   const safeRole = sanitizeRole(role)
   const safeEmail = sanitizeEmail(email)
@@ -249,8 +242,6 @@ export async function deleteUser(userId) {
   }
   return res.json()
 }
-
-
 
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController()
