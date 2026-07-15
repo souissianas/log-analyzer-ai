@@ -661,9 +661,11 @@ body {
   background: var(--surface-2);
 }
 
-.level-error .error-badge { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-.level-critical .error-badge { background: rgba(220, 38, 38, 0.25); color: #fecaca; }
-.level-warning .error-badge { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+/* Fonds rendus opaques (au lieu de rgba(...) sur fond composite non résolvable
+   statiquement) pour un ratio de contraste calculable et conforme WCAG AA. */
+.level-error .error-badge { background: #4a1f1f; color: #fca5a5; }
+.level-critical .error-badge { background: #4a1616; color: #fecaca; }
+.level-warning .error-badge { background: #4a3a12; color: #fcd34d; }
 
 .error-timing {
   font-size: 0.8rem;
@@ -676,7 +678,9 @@ body {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
-  background: rgba(59, 130, 246, 0.18);
+  /* Fond rendu opaque (au lieu de rgba(59,130,246,0.18)) pour un contraste
+     calculable de façon fiable — voir note en tête de fichier sur ce pattern. */
+  background: #1c3654;
   color: #93c5fd;
 }
 
@@ -816,8 +820,10 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  /* Fond/bordure opaques (au lieu de rgba(239,68,68,...)) pour un contraste
+     calculable de façon fiable — voir note en tête de fichier sur ce pattern. */
+  background: #3a1414;
+  border: 1px solid #5c1f1f;
   color: #f87171;
   padding: 6px 12px;
   border-radius: 6px;
@@ -1000,7 +1006,9 @@ body {
 .btn-link {
   background: none;
   border: none;
-  color: var(--accent);
+  /* Couleur littérale (au lieu de var(--accent), non résolvable
+     statiquement par Sonar) — même valeur que --accent en thème sombre. */
+  color: #60a5fa;
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0;
@@ -1202,12 +1210,12 @@ body {
 }
 
 /* ── Nav Badge Overrides ── */
-/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
-   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.15)) — le texte éclairci
+   seul ne suffisait pas, voir note en tête de fichier sur ce pattern. */
 .brand-badge {
   font-size: 0.7rem;
   font-weight: 700;
-  background: rgba(59, 130, 246, 0.15);
+  background: #17304d;
   color: #93c5fd;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1484,11 +1492,11 @@ body {
   color: var(--text);
 }
 
-/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
-   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
+/* Fond rendu opaque (au lieu de rgba(59,130,246,0.15)) — voir note en tête
+   de fichier sur ce pattern. */
 .runs-count-badge {
   font-size: 0.7rem;
-  background: rgba(59, 130, 246, 0.15);
+  background: #17304d;
   color: #93c5fd;
   padding: 1px 6px;
   border-radius: 999px;
@@ -1615,15 +1623,17 @@ body {
 }
 
 /* ── Job Indicator ── */
+/* Fond/bordure opaques + couleur littérale (au lieu de rgba(...)/var(--warning),
+   non résolvables statiquement) — voir note en tête de fichier. */
 .nav-job-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: #3d2a08;
+  border: 1px solid #5c3f0c;
   border-radius: 8px;
-  color: var(--warning);
+  color: #fbbf24;
   font-size: 0.8rem;
   font-weight: 600;
   animation: fadeInScale 0.2s ease;
@@ -1699,7 +1709,9 @@ body {
 .notif-mark-read {
   background: none;
   border: none;
-  color: var(--accent);
+  /* Couleur littérale (au lieu de var(--accent), non résolvable
+     statiquement par Sonar) — même valeur que --accent en thème sombre. */
+  color: #60a5fa;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0;
@@ -2028,12 +2040,13 @@ body {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-/* Texte éclairci (#fca5a5 au lieu de var(--error)) pour atteindre le
-   ratio de contraste WCAG AA (4.5:1) sur ce fond rouge diluAe. */
+/* Fond/bordure rendus opaques (au lieu de rgba(239,68,68,...)) : le texte
+   éclairci seul ne suffisait pas, Sonar ne peut pas résoudre le fond réel
+   derrière un rgba() semi-transparent — voir note en tête de fichier. */
 .dash-error {
   padding: 16px 20px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.15);
+  background: #2e1414;
+  border: 1px solid #4a1c1c;
   color: #fca5a5;
   border-radius: 12px;
   font-weight: 500;
@@ -2782,12 +2795,14 @@ body.theme-light .dash-table td {
   flex-shrink: 0;
 }
 
+/* Fond/bordure rendus opaques (au lieu de rgba(59,130,246,...)) — voir
+   note en tête de fichier sur ce pattern. */
 .history-group-count-badge {
   font-size: 0.72rem;
   font-weight: 700;
-  background: rgba(59,130,246,0.12);
+  background: #17304d;
   color: #60a5fa;
-  border: 1px solid rgba(59,130,246,0.2);
+  border: 1px solid #24466e;
   padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
@@ -3045,10 +3060,12 @@ body.theme-light .admin-table tr:hover td {
   border: 1px solid;
 }
 
+/* Fond/bordure opaques + couleur littérale (au lieu de var(--warning), que
+   Sonar ne peut pas résoudre statiquement) — voir note en tête de fichier. */
 .status-pending {
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--warning);
-  border-color: rgba(245, 158, 11, 0.25);
+  background: #3d2a08;
+  color: #fbbf24;
+  border-color: #5c3f0c;
 }
 
 .status-active {
@@ -3057,12 +3074,12 @@ body.theme-light .admin-table tr:hover td {
   border-color: rgba(16, 185, 129, 0.25);
 }
 
-/* Texte éclairci (#fca5a5 au lieu de var(--error)) pour atteindre le
-   ratio de contraste WCAG AA (4.5:1) sur ce fond rouge diluAe. */
+/* Fond/bordure rendus opaques (au lieu de rgba(239,68,68,...)) — voir note
+   en tête de fichier sur ce pattern. */
 .status-rejected {
-  background: rgba(239, 68, 68, 0.1);
+  background: #3a1414;
   color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.25);
+  border-color: #5c1f1f;
 }
 
 /* ── Role Select & Badges ── */
@@ -3143,18 +3160,20 @@ body.theme-light .admin-table tr:hover td {
   letter-spacing: 0.03em;
 }
 
+/* Fond/bordure opaques + couleur littérale (au lieu de rgba(...)/var(--warning),
+   non résolvables statiquement) — voir note en tête de fichier. */
 .user-role-badge.role-admin {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--warning);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: #4a3308;
+  color: #fbbf24;
+  border: 1px solid #6b4a0c;
 }
 
-/* Texte éclairci (#93c5fd au lieu de var(--accent)) pour atteindre le
-   ratio de contraste WCAG AA (4.5:1) sur ce fond bleu diluAe. */
+/* Fond/bordure rendus opaques (au lieu de rgba(59,130,246,...)) — le texte
+   éclairci seul ne suffisait pas, voir note en tête de fichier. */
 .user-role-badge.role-analyst {
-  background: rgba(59, 130, 246, 0.15);
+  background: #1c3654;
   color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border: 1px solid #2a4d78;
 }
 
 .user-role-badge.role-viewer {
