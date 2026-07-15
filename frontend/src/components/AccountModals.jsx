@@ -16,6 +16,12 @@ export default function AccountModals({
   // main. On remplace par un vrai <button> dédié au clic sur le fond (les
   // boutons natifs gèrent Entrée/Espace tout seuls) et Echap est géré une
   // seule fois ici via un listener clavier global tant qu'une modale est ouverte.
+  //
+  // Smell "Use <dialog> instead of the role=dialog" : les deux panneaux de
+  // modale étaient des <div role="dialog" aria-modal="true">. On les remplace
+  // par de vrais éléments <dialog open>, qui portent nativement la sémantique
+  // modale/dialog sur tous les navigateurs et lecteurs d'écran, sans avoir à
+  // la reconstruire à la main avec des attributs ARIA.
   useEffect(() => {
     if (!showAccountModal && !showSettingsModal) return undefined
 
@@ -54,10 +60,9 @@ export default function AccountModals({
               cursor: 'default',
             }}
           />
-          <div
+          <dialog
             className="shortcuts-modal"
-            role="dialog"
-            aria-modal="true"
+            open
             aria-labelledby="account-modal-title"
             style={{ minWidth: '420px', position: 'relative', zIndex: 1 }}
           >
@@ -90,7 +95,7 @@ export default function AccountModals({
                 </p>
               </div>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
       {/* ── Paramètres Modal ─────────────────────────────────────── */}
@@ -113,10 +118,9 @@ export default function AccountModals({
               cursor: 'default',
             }}
           />
-          <div
+          <dialog
             className="shortcuts-modal"
-            role="dialog"
-            aria-modal="true"
+            open
             aria-labelledby="settings-modal-title"
             style={{ minWidth: '420px', position: 'relative', zIndex: 1 }}
           >
@@ -168,7 +172,7 @@ export default function AccountModals({
                 </button>
               </div>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </>
