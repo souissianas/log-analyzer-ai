@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 export default function AccountModals({
   showAccountModal,
   setShowAccountModal,
@@ -9,28 +11,58 @@ export default function AccountModals({
   t,
   language,
 }) {
+  // Smell "Use <button> instead of the role=button" : l'ancien overlay était
+  // un <div role="button" onKeyDown=...> qui gérait Echap/Entrée/Espace à la
+  // main. On remplace par un vrai <button> dédié au clic sur le fond (les
+  // boutons natifs gèrent Entrée/Espace tout seuls) et Echap est géré une
+  // seule fois ici via un listener clavier global tant qu'une modale est ouverte.
+  useEffect(() => {
+    if (!showAccountModal && !showSettingsModal) return undefined
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setShowAccountModal(false)
+        setShowSettingsModal(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAccountModal, showSettingsModal, setShowAccountModal, setShowSettingsModal])
+
   if (!showAccountModal && !showSettingsModal) return null;
+
   return (
     <>
       {/* ── Mon Compte Modal ─────────────────────────────────────── */}
       {showAccountModal && (
-        <div
-          className="modal-overlay"
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAccountModal(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setShowAccountModal(false);
-            }
-          }}
-        >
-          <div className="shortcuts-modal" style={{ minWidth: '420px' }}>
+        <div className="modal-overlay">
+          <button
+            type="button"
+            className="modal-overlay-backdrop"
+            aria-label={t('modalClose')}
+            onClick={() => setShowAccountModal(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              margin: 0,
+              padding: 0,
+              background: 'transparent',
+              cursor: 'default',
+            }}
+          />
+          <div
+            className="shortcuts-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-modal-title"
+            style={{ minWidth: '420px', position: 'relative', zIndex: 1 }}
+          >
             <div className="shortcuts-modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <h3 id="account-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: '20px', height: '20px', color: 'var(--accent)' }}>
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
@@ -63,23 +95,33 @@ export default function AccountModals({
       )}
       {/* ── Paramètres Modal ─────────────────────────────────────── */}
       {showSettingsModal && (
-        <div
-          className="modal-overlay"
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowSettingsModal(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setShowSettingsModal(false);
-            }
-          }}
-        >
-          <div className="shortcuts-modal" style={{ minWidth: '420px' }}>
+        <div className="modal-overlay">
+          <button
+            type="button"
+            className="modal-overlay-backdrop"
+            aria-label={t('modalClose')}
+            onClick={() => setShowSettingsModal(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              margin: 0,
+              padding: 0,
+              background: 'transparent',
+              cursor: 'default',
+            }}
+          />
+          <div
+            className="shortcuts-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-modal-title"
+            style={{ minWidth: '420px', position: 'relative', zIndex: 1 }}
+          >
             <div className="shortcuts-modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <h3 id="settings-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: '20px', height: '20px', color: 'var(--accent)' }}>
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
