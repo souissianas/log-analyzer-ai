@@ -163,15 +163,27 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage
 
-      # v5 est dépréciée et contient une vulnérabilité connue (cf. warning
-      # CI : "no longer supported and contains a security vulnerability").
-      # v6 corrige aussi la gestion du provisioning JRE, ce qui devrait
-      # réduire les 504 aléatoires vus sur api.sonarcloud.io/analysis/jres.
+      # Le scanner CLI 7.x essaie par défaut de télécharger/vérifier un JRE
+      # via l'API SonarCloud (GET /analysis/jres), qui renvoie parfois un 504
+      # (panne côté serveur, hors de notre contrôle). On installe notre
+      # propre JRE et on désactive l'auto-provisioning (sonar.scanner.
+      # skipJreProvisioning=true) pour éliminer complètement cet appel réseau
+      # fragile. Java 21 est requis : Java 17 sera non supporté par
+      # SonarQube Cloud à partir du 20 juillet 2026.
+      - name: Setup Java for Sonar Scanner
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.scanner.skipJreProvisioning=true
 
   helm-lint:
     name: Helm Lint
