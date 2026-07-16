@@ -99,14 +99,14 @@ describe("Navbar", () => {
   it("calls setDarkMode when dark mode toggle is clicked", () => {
     const setDarkMode = vi.fn();
     render(<Navbar {...defaultProps} setDarkMode={setDarkMode} />);
-    const darkModeBtn = document.querySelector(".dark-mode-toggle, button[title*='ombre'], button[aria-label*='mode']");
-    if (darkModeBtn) {
-      fireEvent.click(darkModeBtn);
-      expect(setDarkMode).toHaveBeenCalled();
-    } else {
-      // Acceptable: might be rendered differently
-      expect(true).toBe(true);
-    }
+    const darkModeBtn = document.querySelector(
+      ".dark-mode-toggle, button[title*='ombre'], button[aria-label*='mode']"
+    );
+    // The button must exist in the rendered Navbar; fail loudly instead of
+    // silently passing if the selector doesn't match (avoids a tautological assertion).
+    expect(darkModeBtn).toBeTruthy();
+    fireEvent.click(darkModeBtn);
+    expect(setDarkMode).toHaveBeenCalled();
   });
 
   it("shows notification panel when notification button is clicked", () => {
@@ -117,13 +117,14 @@ describe("Navbar", () => {
       ],
     };
     render(<Navbar {...props} />);
-    const notifBtn = document.querySelector(".notif-btn, [aria-label*='notification'], button.bell");
-    if (notifBtn) {
-      fireEvent.click(notifBtn);
-      expect(screen.getByText(/Fichier analysé/i)).toBeInTheDocument();
-    } else {
-      expect(true).toBe(true);
-    }
+    const notifBtn = document.querySelector(
+      ".notif-btn, [aria-label*='notification'], button.bell"
+    );
+    // Same rationale as above: require the element to exist rather than
+    // falling back to an assertion that always succeeds.
+    expect(notifBtn).toBeTruthy();
+    fireEvent.click(notifBtn);
+    expect(screen.getByText(/Fichier analysé/i)).toBeInTheDocument();
   });
 
   it("renders with viewer role", () => {
