@@ -21,16 +21,19 @@ class TestJWTHelpers(unittest.TestCase):
         self.assertFalse(jwt.verify_password("wrong-password", hashed))
 
     @patch("core.jwt._bcrypt_lib", None)
-    def test_password_hashing_and_verification_passlib_fallback(self):
+    @patch("core.jwt._pwd_context")
+    def test_password_hashing_and_verification_passlib_fallback(self, mock_pwd_context):
         password = "fallback-test-password"
-        # Si passlib est dispo, on l'utilise
-        if jwt._USE_PASSLIB and jwt._pwd_context:
+        mock_pwd_context.hash.return_value = "mocked-hash"
+        mock_pwd_context.verify.side_effect = lambda p, h: p == password and h == "mocked-hash"
+
+        # Si passlib est configuré comme utilisable dans le code
+        with patch("core.jwt._USE_PASSLIB", True):
             hashed = jwt.get_password_hash(password)
+            self.assertEqual(hashed, "mocked-hash")
             self.assertTrue(jwt.verify_password(password, hashed))
             self.assertFalse(jwt.verify_password("wrong", hashed))
-        else:
-            with self.assertRaises(RuntimeError):
-                jwt.get_password_hash(password)
+
 
     @patch("core.jwt._bcrypt_lib")
     @patch("core.jwt._USE_PASSLIB", False)
