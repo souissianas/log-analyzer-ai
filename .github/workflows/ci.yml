@@ -119,8 +119,10 @@ jobs:
       # Épinglé sur une release taguée plutôt que @master : @master peut
       # changer de comportement à tout moment sans avertissement (CI cassée
       # de manière imprévisible, ou pire, code injecté en amont non audité).
+      # Depuis l'attaque supply-chain sur ce projet, les tags utilisent le
+      # préfixe "v" (v0.36.0 est la dernière release stable au 16/07/2026).
       - name: Trivy Backend Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: log-analyzer-backend:ci
           format: table
@@ -129,7 +131,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy Frontend Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: log-analyzer-frontend:ci
           format: table
