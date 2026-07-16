@@ -10,6 +10,13 @@ import time
 import unittest
 from unittest.mock import patch, MagicMock
 
+# Backup original modules to prevent polluting other test files
+_orig_celery = sys.modules.get("celery")
+_orig_redis = sys.modules.get("redis")
+_orig_storage = sys.modules.get("services.storage")
+_orig_job_store = sys.modules.get("core.job_store")
+_orig_ollama = sys.modules.get("services.ollama_service")
+
 # ── Stub celery avant l'import de worker ────────────────────────────────────
 # worker.py fait `from celery import Celery` au niveau module.
 # On stub celery pour qu'il soit importable sans installer le broker.
@@ -26,11 +33,11 @@ class _FakeCelery:
         return decorator
 
 celery_stub.Celery = _FakeCelery
-sys.modules.setdefault("celery", celery_stub)
+sys.modules["celery"] = celery_stub
 
 # Stub redis (used indirectly via job_store)
 redis_stub = types.ModuleType("redis")
-sys.modules.setdefault("redis", redis_stub)
+sys.modules["redis"] = redis_stub
 
 # Stub services.storage
 storage_stub = types.ModuleType("services.storage")
@@ -51,6 +58,20 @@ sys.modules["services.ollama_service"] = ollama_stub
 # Now import the pure helpers from worker
 import importlib
 import worker as w
+
+# Restore original modules IMMEDIATELY after import to prevent side-effects in other tests
+for modname, orig_val in [
+    ("celery", _orig_celery),
+    ("redis", _orig_redis),
+    ("services.storage", _orig_storage),
+    ("core.job_store", _orig_job_store),
+    ("services.ollama_service", _orig_ollama),
+]:
+    if orig_val is None:
+        sys.modules.pop(modname, None)
+    else:
+        sys.modules[modname] = orig_val
+
 
 
 # ── Helper : fake LogEntry ────────────────────────────────────────────────────
