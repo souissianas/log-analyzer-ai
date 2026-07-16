@@ -591,3 +591,111 @@ describe("analysis files functions", () => {
   });
 });
 
+// ── streamJobProgress ────────────────────────────────────────────────────────
+describe("streamJobProgress", () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("handles successful SSE stream from connect to done", async () => {
+    const { streamJobProgress } = await import("./api");
+    
+    const onProgress = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    const mockValues = [
+      { done: false, value: new TextEncoder().encode("data: {\"status\":\"pending\",\"current\":5,\"total\":10}\n") },
+      { done: false, value: new TextEncoder().encode("data: {\"status\":\"done\",\"log_id\":99}\n") }
+    ];
+    let callCount = 0;
+    const mockReader = {
+      read: vi.fn(() => Promise.resolve(mockValues[callCount++]))
+    };
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => mockReader
+      }
+    });
+
+    const { close } = streamJobProgress("job-123", { onProgress, onDone, onError });
+
+    // Attendre que la promesse de la connexion se résolve et consomme le flux
+    await vi.runAllTimersAsync();
+
+    expect(onProgress).toHaveBeenCalledWith({ status: "pending", current: 5, total: 10 });
+    expect(onDone).toHaveBeenCalledWith({ status: "done", log_id: 99 });
+    expect(onError).not.toHaveBeenCalled();
+    close();
+  });
+
+  it("falls back to polling on non-ok SSE response", async () => {
+    const { streamJobProgress } = await import("./api");
+
+    const onProgress = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    // SSE connection fails (e.g. 500)
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500
+    });
+
+    // Mock polling responses
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: "pending", current: 1, total: 5 })
+    });
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: "done", log_id: 42 })
+    });
+
+    const { close } = streamJobProgress("job-123", { onProgress, onDone, onError });
+
+    // Exécuter les timers pour déclencher le polling (qui attend 3s par itération)
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(onProgress).toHaveBeenCalledWith({ status: "pending", current: 1, total: 5 });
+
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(onDone).toHaveBeenCalledWith({ status: "done", log_id: 42 });
+
+    close();
+  });
+
+  it("retries SSE on network error up to 3 times then falls back to polling", async () => {
+    const { streamJobProgress } = await import("./api");
+
+    const onProgress = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    // Mock network failures for 3 connection attempts
+    global.fetch.mockRejectedValue(new Error("Network connection lost"));
+
+    // Polling mock response
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ error: "job_not_found" })
+    });
+
+    const { close } = streamJobProgress("job-123", { onProgress, onDone, onError });
+
+    // Attendre les 3 tentatives (espacées de SSE_RETRY_DELAY_MS = 3s)
+    await vi.advanceTimersByTimeAsync(10000);
+
+    // Puisque le polling a renvoyé job_not_found, onError doit être appelé
+    expect(onError).toHaveBeenCalledWith("Job introuvable ou expiré");
+    close();
+  });
+});
+
+
