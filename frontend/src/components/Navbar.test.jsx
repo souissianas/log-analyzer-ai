@@ -2,7 +2,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Navbar from "./Navbar";
 
-const VIEWS = { UPLOAD: "upload", HISTORY: "history", DASHBOARD: "dashboard" };
+// ANALYZE et USERS ajoutés : le composant réel boucle sur VIEWS.ANALYZE et,
+// pour un admin, sur VIEWS.USERS. Sans ces clés, item.id valait `undefined`
+// pour deux items -> React levait "Each child in a list should have a
+// unique key prop" (clés dupliquées à undefined).
+const VIEWS = { ANALYZE: "analyze", HISTORY: "history", DASHBOARD: "dashboard", USERS: "users" };
 
 const defaultProps = {
   user: { email: "admin@test.com", role: "admin" },
@@ -99,14 +103,14 @@ describe("Navbar", () => {
   it("calls setDarkMode when dark mode toggle is clicked", () => {
     const setDarkMode = vi.fn();
     render(<Navbar {...defaultProps} setDarkMode={setDarkMode} />);
-    const darkModeBtn = document.querySelector(".dark-mode-toggle, button[title*='ombre'], button[aria-label*='mode']");
-    if (darkModeBtn) {
-      fireEvent.click(darkModeBtn);
-      expect(setDarkMode).toHaveBeenCalled();
-    } else {
-      // Acceptable: might be rendered differently
-      expect(true).toBe(true);
-    }
+    // Le bouton n'a pas de classe dédiée (il partage "btn-icon-action" avec
+    // le sélecteur de langue et la cloche), mais son `title` est unique :
+    // t(darkMode ? 'navLightMode' : 'navDarkMode'). Avec darkMode=false et
+    // t = k => k, le title vaut exactement "navDarkMode".
+    const darkModeBtn = document.querySelector('button[title="navDarkMode"]');
+    expect(darkModeBtn).toBeTruthy();
+    fireEvent.click(darkModeBtn);
+    expect(setDarkMode).toHaveBeenCalled();
   });
 
   it("shows notification panel when notification button is clicked", () => {
@@ -117,13 +121,11 @@ describe("Navbar", () => {
       ],
     };
     render(<Navbar {...props} />);
-    const notifBtn = document.querySelector(".notif-btn, [aria-label*='notification'], button.bell");
-    if (notifBtn) {
-      fireEvent.click(notifBtn);
-      expect(screen.getByText(/Fichier analysé/i)).toBeInTheDocument();
-    } else {
-      expect(true).toBe(true);
-    }
+    // Le bouton cloche a title={t('navNotifications')} -> "navNotifications"
+    const notifBtn = document.querySelector('button[title="navNotifications"]');
+    expect(notifBtn).toBeTruthy();
+    fireEvent.click(notifBtn);
+    expect(screen.getByText(/Fichier analysé/i)).toBeInTheDocument();
   });
 
   it("renders with viewer role", () => {
