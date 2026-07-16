@@ -116,8 +116,11 @@ jobs:
       - name: Build Frontend Image
         run: docker build -t log-analyzer-frontend:ci ./frontend
 
+      # Épinglé sur une release taguée plutôt que @master : @master peut
+      # changer de comportement à tout moment sans avertissement (CI cassée
+      # de manière imprévisible, ou pire, code injecté en amont non audité).
       - name: Trivy Backend Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: log-analyzer-backend:ci
           format: table
@@ -126,7 +129,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy Frontend Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: log-analyzer-frontend:ci
           format: table
@@ -158,8 +161,12 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage
 
+      # v5 est dépréciée et contient une vulnérabilité connue (cf. warning
+      # CI : "no longer supported and contains a security vulnerability").
+      # v6 corrige aussi la gestion du provisioning JRE, ce qui devrait
+      # réduire les 504 aléatoires vus sur api.sonarcloud.io/analysis/jres.
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
