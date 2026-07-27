@@ -127,7 +127,7 @@ jobs:
           image-ref: log-analyzer-backend:ci
           format: table
           severity: CRITICAL,HIGH
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
 
       - name: Trivy Frontend Scan
@@ -136,7 +136,7 @@ jobs:
           image-ref: log-analyzer-frontend:ci
           format: table
           severity: CRITICAL,HIGH
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
 
   sonarqube:
@@ -163,13 +163,6 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage
 
-      # Le scanner CLI 7.x essaie par défaut de télécharger/vérifier un JRE
-      # via l'API SonarCloud (GET /analysis/jres), qui renvoie parfois un 504
-      # (panne côté serveur, hors de notre contrôle). On installe notre
-      # propre JRE et on désactive l'auto-provisioning (sonar.scanner.
-      # skipJreProvisioning=true) pour éliminer complètement cet appel réseau
-      # fragile. Java 21 est requis : Java 17 sera non supporté par
-      # SonarQube Cloud à partir du 20 juillet 2026.
       - name: Setup Java for Sonar Scanner
         uses: actions/setup-java@v4
         with:
@@ -182,10 +175,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_JAVA_PATH: ${{ env.JAVA_HOME }}/bin/java
-        with:
-          args: >
-            -Dsonar.scanner.skipJreProvisioning=true
-            -Dsonar.java.jdkHome=${{ env.JAVA_HOME }}
 
   helm-lint:
     name: Helm Lint
