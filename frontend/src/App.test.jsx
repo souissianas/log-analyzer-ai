@@ -3,9 +3,8 @@ import {
   screen,
   fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Mock all API imports used by App.jsx ─────────────────────────────────────
 vi.mock("./api", () => ({
@@ -169,12 +168,8 @@ describe("App — unauthenticated", () => {
 
   it("renders main layout after login success", async () => {
     renderApp();
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("login-page"));
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("navbar")).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByTestId("login-page"));
+    expect(await screen.findByTestId("navbar")).toBeInTheDocument();
   });
 });
 
@@ -190,34 +185,28 @@ describe("App — navigation", () => {
 
   it("shows analyze view by default", async () => {
     renderApp();
-    await waitFor(() => {
-      expect(screen.getByTestId("log-uploader")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("log-uploader")).toBeInTheDocument();
   });
 
   it("switches to history view", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-history"));
-    await waitFor(() => {
-      expect(screen.getByTestId("history-page")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("history-page")).toBeInTheDocument();
   });
 
   it("switches to dashboard view", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-dashboard"));
-    await waitFor(() => {
-      expect(screen.getByTestId("dashboard")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("dashboard")).toBeInTheDocument();
   });
 
   it("closes dashboard via onClose callback", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-dashboard"));
-    await waitFor(() => screen.getByTestId("dashboard"));
+    await screen.findByTestId("dashboard");
     fireEvent.click(screen.getByText("Close dashboard"));
     await waitFor(() => {
       expect(screen.queryByTestId("dashboard")).not.toBeInTheDocument();
@@ -228,17 +217,15 @@ describe("App — navigation", () => {
   it("shows UserManagement only for admin role", async () => {
     setupLoggedInUser("admin");
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-users"));
-    await waitFor(() => {
-      expect(screen.getByTestId("user-management")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("user-management")).toBeInTheDocument();
   });
 
   it("does not show UserManagement for analyst role", async () => {
     setupLoggedInUser("analyst");
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-users"));
     await waitFor(() => {
       expect(screen.queryByTestId("user-management")).not.toBeInTheDocument();
@@ -261,13 +248,9 @@ describe("App — logout", () => {
 
   it("shows LoginPage after logout", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("nav-logout"));
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("login-page")).toBeInTheDocument();
-    });
+    await screen.findByTestId("navbar");
+    fireEvent.click(screen.getByTestId("nav-logout"));
+    expect(await screen.findByTestId("login-page")).toBeInTheDocument();
   });
 });
 
@@ -292,12 +275,10 @@ describe("App — history selection", () => {
     });
 
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-history"));
-    await waitFor(() => screen.getByTestId("history-page"));
-    await act(async () => {
-      fireEvent.click(screen.getByText("Select"));
-    });
+    await screen.findByTestId("history-page");
+    fireEvent.click(screen.getByText("Select"));
     await waitFor(() => {
       expect(api.fetchAnalysis).toHaveBeenCalledWith(1);
     });
@@ -306,16 +287,11 @@ describe("App — history selection", () => {
   it("handles fetchAnalysis error gracefully", async () => {
     api.fetchAnalysis.mockRejectedValue(new Error("Not found"));
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-history"));
-    await waitFor(() => screen.getByTestId("history-page"));
-    await act(async () => {
-      fireEvent.click(screen.getByText("Select"));
-    });
-    // Should show an error, not crash
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-    });
+    await screen.findByTestId("history-page");
+    fireEvent.click(screen.getByText("Select"));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });
 
@@ -331,16 +307,13 @@ describe("App — file analysis", () => {
 
   it("shows loading spinner during analysis", async () => {
     api.submitAnalysisJob.mockResolvedValue({ job_id: "job-1" });
-    // streamJobProgress never resolves (keeps loading state)
     api.streamJobProgress.mockImplementation((jobId, { onProgress }) => {
       return { close: vi.fn() };
     });
 
     renderApp();
-    await waitFor(() => screen.getByTestId("log-uploader"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("log-uploader"));
-    });
+    await screen.findByTestId("log-uploader");
+    fireEvent.click(screen.getByTestId("log-uploader"));
     await waitFor(() => {
       expect(api.submitAnalysisJob).toHaveBeenCalled();
     });
@@ -357,10 +330,8 @@ describe("App — file analysis", () => {
     });
 
     renderApp();
-    await waitFor(() => screen.getByTestId("log-uploader"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("log-uploader"));
-    });
+    await screen.findByTestId("log-uploader");
+    fireEvent.click(screen.getByTestId("log-uploader"));
     await waitFor(() => {
       expect(api.getJobResult).toHaveBeenCalledWith("job-2");
     });
@@ -369,13 +340,9 @@ describe("App — file analysis", () => {
   it("shows error when submitAnalysisJob fails", async () => {
     api.submitAnalysisJob.mockRejectedValue(new Error("Network error"));
     renderApp();
-    await waitFor(() => screen.getByTestId("log-uploader"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("log-uploader"));
-    });
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-    });
+    await screen.findByTestId("log-uploader");
+    fireEvent.click(screen.getByTestId("log-uploader"));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 
   it("shows error when stream job fails", async () => {
@@ -385,13 +352,9 @@ describe("App — file analysis", () => {
       return { close: vi.fn() };
     });
     renderApp();
-    await waitFor(() => screen.getByTestId("log-uploader"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("log-uploader"));
-    });
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-    });
+    await screen.findByTestId("log-uploader");
+    fireEvent.click(screen.getByTestId("log-uploader"));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });
 
@@ -407,25 +370,21 @@ describe("App — dark mode", () => {
 
   it("starts in dark mode when no theme is stored", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
-    // Default: dark mode → body should NOT have theme-light class
+    await screen.findByTestId("navbar");
     expect(document.body.classList.contains("theme-light")).toBe(false);
   });
 
   it("starts in light mode when theme=light is stored", async () => {
     localStorage.setItem("theme", "light");
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     expect(document.body.classList.contains("theme-light")).toBe(true);
   });
 
   it("toggles to light mode when theme button clicked", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("nav-theme"));
-    });
-    // After toggle from dark → light
+    await screen.findByTestId("navbar");
+    fireEvent.click(screen.getByTestId("nav-theme"));
     expect(document.body.classList.contains("theme-light")).toBe(true);
   });
 });
@@ -442,43 +401,37 @@ describe("App — keyboard shortcuts", () => {
 
   it("Ctrl+2 switches to history view", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.keyDown(document, { key: "2", ctrlKey: true });
-    await waitFor(() => {
-      expect(screen.getByTestId("history-page")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("history-page")).toBeInTheDocument();
   });
 
   it("Ctrl+3 switches to dashboard view", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.keyDown(document, { key: "3", ctrlKey: true });
-    await waitFor(() => {
-      expect(screen.getByTestId("dashboard")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("dashboard")).toBeInTheDocument();
   });
 
   it("Ctrl+1 switches back to analyze view", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.click(screen.getByTestId("nav-history"));
-    await waitFor(() => screen.getByTestId("history-page"));
+    await screen.findByTestId("history-page");
     fireEvent.keyDown(document, { key: "1", ctrlKey: true });
-    await waitFor(() => {
-      expect(screen.getByTestId("log-uploader")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("log-uploader")).toBeInTheDocument();
   });
 
   it("Escape closes modals (no crash)", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("ignores shortcuts when typed in an input", async () => {
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();
@@ -490,11 +443,9 @@ describe("App — keyboard shortcuts", () => {
   it("Ctrl+4 navigates to users for admin", async () => {
     setupLoggedInUser("admin");
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
+    await screen.findByTestId("navbar");
     fireEvent.keyDown(document, { key: "4", ctrlKey: true });
-    await waitFor(() => {
-      expect(screen.getByTestId("user-management")).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId("user-management")).toBeInTheDocument();
   });
 });
 
@@ -514,8 +465,7 @@ describe("App — syncCurrentUser", () => {
       email: "user@test.com",
     });
     renderApp();
-    await waitFor(() => screen.getByTestId("navbar"));
-    // User email should still be visible
+    await screen.findByTestId("navbar");
     expect(screen.getByTestId("user-email")).toHaveTextContent("user@test.com");
   });
 

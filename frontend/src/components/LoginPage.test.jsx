@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import LoginPage from "./LoginPage";
 import { LanguageProvider } from "../i18n";
@@ -17,13 +17,6 @@ const wrap = (ui) => render(<LanguageProvider>{ui}</LanguageProvider>);
 beforeEach(() => {
   vi.clearAllMocks();
 });
-
-// i18n button texts:
-// loginBtnSubmitLogin        = "Se connecter"
-// loginBtnSubmitRegister     = "S'inscrire"
-// loginToggleNewAccount      = "Nouveau ? Creez une organisation et inscrivez-vous"
-// loginToggleHaveAccount     = "Vous avez deja un compte ? Connectez-vous"
-// loginOrgNameLabel          = "Nom de l'organisation"
 
 // ── Login view ─────────────────────────────────────────────────────────────
 describe("LoginPage — login view", () => {
@@ -60,7 +53,7 @@ describe("LoginPage — login view", () => {
     fireEvent.change(screen.getByLabelText(/Mot de passe/i), { target: { value: "wrong" } });
     fireEvent.click(screen.getByRole("button", { name: /Se connecter/i }));
 
-    await waitFor(() => expect(screen.getByText(/Email ou mot de passe incorrect/i)).toBeInTheDocument());
+    expect(await screen.findByText(/Email ou mot de passe incorrect/i)).toBeInTheDocument();
   });
 
   it("shows forgot password link", () => {
@@ -72,7 +65,6 @@ describe("LoginPage — login view", () => {
     wrap(<LoginPage onLoginSuccess={vi.fn()} />);
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "prefill@example.com" } });
     fireEvent.click(screen.getByText(/Mot de passe oubli/i));
-    // Should switch to forgot view with the email pre-filled
     const emailInput = screen.getByLabelText(/Adresse email/i);
     expect(emailInput.value).toBe("prefill@example.com");
   });
@@ -103,19 +95,14 @@ describe("LoginPage — register view", () => {
     expect(screen.getByLabelText(/Slug/i).value).toBe("acme-corp");
   });
 
-  it("does not call api.register when org name is missing (internal validation)", async () => {
+  it("does not call api.register when org name is missing (internal validation)", () => {
     wrap(<LoginPage onLoginSuccess={vi.fn()} />);
     switchToRegister();
 
-    // Fill email + password but leave org empty
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "new@example.com" } });
     fireEvent.change(screen.getAllByLabelText(/Mot de passe/i)[0], { target: { value: "Pass123!" } });
-    // Org name is empty — component has its own guard before calling api.register
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /inscrire/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /inscrire/i }));
 
-    // Component throws before reaching api.register; so api.register must NOT be called
     expect(api.register).not.toHaveBeenCalled();
   });
 
@@ -129,9 +116,7 @@ describe("LoginPage — register view", () => {
     fireEvent.change(screen.getAllByLabelText(/Mot de passe/i)[0], { target: { value: "Pass123!" } });
     fireEvent.change(screen.getByLabelText(/Nom de l.organisation/i), { target: { value: "My Org" } });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /inscrire/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /inscrire/i }));
 
     await waitFor(() => expect(api.register).toHaveBeenCalledWith(
       "new@example.com", "Pass123!", "My Org", "my-org", "viewer"
@@ -164,9 +149,7 @@ describe("LoginPage — forgot password view", () => {
     switchToForgot();
 
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "user@example.com" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
 
     await waitFor(() => expect(api.forgotPassword).toHaveBeenCalledWith("user@example.com"));
   });
@@ -177,12 +160,9 @@ describe("LoginPage — forgot password view", () => {
     switchToForgot();
 
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "user@example.com" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
 
-    // After success, view switches to 'reset' — "Mettre a jour" button appears
-    await waitFor(() => expect(screen.getByRole("button", { name: /Mettre/i })).toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: /Mettre/i })).toBeInTheDocument();
   });
 
   it("shows error message when forgot password fails", async () => {
@@ -191,11 +171,9 @@ describe("LoginPage — forgot password view", () => {
     switchToForgot();
 
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "user@example.com" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
 
-    await waitFor(() => expect(screen.getByText(/Trop de demandes/i)).toBeInTheDocument());
+    expect(await screen.findByText(/Trop de demandes/i)).toBeInTheDocument();
   });
 
   it("back button returns to login view", () => {
@@ -208,17 +186,13 @@ describe("LoginPage — forgot password view", () => {
 
 // ── Reset password view ────────────────────────────────────────────────────
 describe("LoginPage — reset password view", () => {
-  // Navigate to reset view: forgot → submit → wait for reset form
   const goToReset = async () => {
     api.forgotPassword.mockResolvedValue({ message: "ok" });
     wrap(<LoginPage onLoginSuccess={vi.fn()} />);
     fireEvent.click(screen.getByText(/Mot de passe oubli/i));
     fireEvent.change(screen.getByLabelText(/Adresse email/i), { target: { value: "user@example.com" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
-    });
-    // Wait until the reset form is actually rendered
-    await waitFor(() => screen.getByRole("button", { name: /Mettre/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Envoyer le code/i }));
+    await screen.findByRole("button", { name: /Mettre/i });
   };
 
   it("shows reset form with Mettre a jour button", async () => {
@@ -229,19 +203,13 @@ describe("LoginPage — reset password view", () => {
   it("shows mismatch error when passwords dont match", async () => {
     await goToReset();
 
-    // Use specific IDs from the reset form
     fireEvent.change(document.getElementById("new-password"), { target: { value: "password1" } });
     fireEvent.change(document.getElementById("confirm-password"), { target: { value: "password2" } });
 
-    // Submit the form directly — more reliable than clicking the button in jsdom
-    await act(async () => {
-      const form = document.querySelector("form.login-form");
-      fireEvent.submit(form);
-    });
+    const form = document.querySelector("form.login-form");
+    fireEvent.submit(form);
 
-    await waitFor(() => expect(
-      screen.getByText(/Les mots de passe ne correspondent pas/i)
-    ).toBeInTheDocument());
+    expect(await screen.findByText(/Les mots de passe ne correspondent pas/i)).toBeInTheDocument();
   });
 
   it("calls resetPassword API when passwords match", async () => {
@@ -252,9 +220,7 @@ describe("LoginPage — reset password view", () => {
     fireEvent.change(document.getElementById("new-password"), { target: { value: "NewPass123!" } });
     fireEvent.change(document.getElementById("confirm-password"), { target: { value: "NewPass123!" } });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Mettre/i }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Mettre/i }));
 
     await waitFor(() => expect(api.resetPassword).toHaveBeenCalledWith(
       "user@example.com", "123456", "NewPass123!"

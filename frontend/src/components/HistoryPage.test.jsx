@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { LanguageProvider } from "../i18n";
 
@@ -27,23 +27,21 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("HistoryPage", () => {
   // ── Loading / Error / Empty ──────────────────────────────────────────────
-  it("renders without crashing while loading", async () => {
+  it("renders without crashing while loading", () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: [] });
-    await act(async () => { wrap(); });
+    wrap();
     expect(document.body).toBeTruthy();
   });
 
   it("shows error when fetchAnalysisHistory fails", async () => {
     api.fetchAnalysisHistory.mockRejectedValue(new Error("Réseau indisponible"));
-    await act(async () => { wrap(); });
-    await waitFor(() =>
-      expect(screen.getByText(/Réseau indisponible/i)).toBeInTheDocument()
-    );
+    wrap();
+    expect(await screen.findByText(/Réseau indisponible/i)).toBeInTheDocument();
   });
 
   it("shows empty state when no items returned", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: [] });
-    await act(async () => { wrap(); });
+    wrap();
     await waitFor(() => {
       expect(screen.queryByText(/server.log/i)).not.toBeInTheDocument();
     });
@@ -52,24 +50,23 @@ describe("HistoryPage", () => {
   // ── Items rendering ──────────────────────────────────────────────────────
   it("displays list of analysis items", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => expect(screen.getByText(/server\.log/i)).toBeInTheDocument());
+    wrap();
+    expect(await screen.findByText(/server\.log/i)).toBeInTheDocument();
     expect(screen.getByText(/docker\.log/i)).toBeInTheDocument();
   });
 
   it("displays error counts for each item", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
-    // 5 errors somewhere on page
+    wrap();
+    await screen.findByText(/server\.log/i);
     expect(screen.getAllByText(/5/i).length).toBeGreaterThan(0);
   });
 
   // ── Search ───────────────────────────────────────────────────────────────
   it("filters items by search query", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
+    wrap();
+    await screen.findByText(/server\.log/i);
 
     const searchInput = document.querySelector(".history-page-search, input[placeholder*='Rechercher']");
     if (searchInput) {
@@ -83,34 +80,33 @@ describe("HistoryPage", () => {
 
   it("shows all items when search query is cleared", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
+    wrap();
+    await screen.findByText(/server\.log/i);
 
     const searchInput = document.querySelector(".history-page-search, input[placeholder*='Rechercher']");
     if (searchInput) {
       fireEvent.change(searchInput, { target: { value: "docker" } });
       fireEvent.change(searchInput, { target: { value: "" } });
-      await waitFor(() => expect(screen.getByText(/server\.log/i)).toBeInTheDocument());
+      expect(await screen.findByText(/server\.log/i)).toBeInTheDocument();
     }
   });
 
   // ── Sort ─────────────────────────────────────────────────────────────────
   it("sort select renders when items are present", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
+    wrap();
+    await screen.findByText(/server\.log/i);
     const selects = screen.getAllByRole("combobox");
     expect(selects.length).toBeGreaterThanOrEqual(0);
   });
 
   it("can change sort order", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
+    wrap();
+    await screen.findByText(/server\.log/i);
     const select = screen.queryByRole("combobox");
     if (select) {
       fireEvent.change(select, { target: { value: "errors_desc" } });
-      // Should not crash
       expect(document.body).toBeTruthy();
     }
   });
@@ -118,9 +114,8 @@ describe("HistoryPage", () => {
   // ── View mode toggle (grouped / flat) ────────────────────────────────────
   it("can toggle view mode", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
-    await act(async () => { wrap(); });
-    await waitFor(() => screen.getByText(/server\.log/i));
-    // Toggle buttons for grouped/flat
+    wrap();
+    await screen.findByText(/server\.log/i);
     const viewButtons = screen.getAllByRole("button").filter(
       b => /flat|group|vue|list/i.test(b.textContent || b.title || "")
     );
@@ -134,16 +129,13 @@ describe("HistoryPage", () => {
   it("calls onSelect when an item is clicked (flat view)", async () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
     const onSelect = vi.fn();
-    await act(async () => {
-      render(
-        <LanguageProvider>
-          <HistoryPage onSelect={onSelect} refreshKey={0} />
-        </LanguageProvider>
-      );
-    });
-    await waitFor(() => screen.getByText(/server\.log/i));
+    render(
+      <LanguageProvider>
+        <HistoryPage onSelect={onSelect} refreshKey={0} />
+      </LanguageProvider>
+    );
+    await screen.findByText(/server\.log/i);
 
-    // Switch to flat view so items are directly clickable
     const flatBtn = document.querySelector(".history-view-btn:not(.active), [title*='lat'], [title*='liste']");
     if (flatBtn) {
       fireEvent.click(flatBtn);
@@ -155,7 +147,6 @@ describe("HistoryPage", () => {
         }
       });
     } else {
-      // grouped mode: click group header to expand, then click run card
       const groupHeader = document.querySelector(".history-group-header");
       if (groupHeader) {
         fireEvent.click(groupHeader);
@@ -171,20 +162,18 @@ describe("HistoryPage", () => {
   });
 
   // ── refreshKey changes ────────────────────────────────────────────────────
-  it("re-fetches data when refreshKey changes", async () => {
+  it("re-fetches data when refreshKey changes", () => {
     api.fetchAnalysisHistory.mockResolvedValue({ items: mockItems });
     const { rerender } = render(
       <LanguageProvider>
         <HistoryPage onSelect={vi.fn()} refreshKey={0} />
       </LanguageProvider>
     );
-    await act(async () => {
-      rerender(
-        <LanguageProvider>
-          <HistoryPage onSelect={vi.fn()} refreshKey={1} />
-        </LanguageProvider>
-      );
-    });
+    rerender(
+      <LanguageProvider>
+        <HistoryPage onSelect={vi.fn()} refreshKey={1} />
+      </LanguageProvider>
+    );
     expect(api.fetchAnalysisHistory).toHaveBeenCalledTimes(2);
   });
 
@@ -192,7 +181,7 @@ describe("HistoryPage", () => {
   it("handles null/undefined dates gracefully", async () => {
     const itemsWithNullDate = [{ id: 1, filename: "null-date.log", created_at: null, total_errors_found: 1, total_analyzed: 1 }];
     api.fetchAnalysisHistory.mockResolvedValue({ items: itemsWithNullDate });
-    await act(async () => { wrap(); });
-    await waitFor(() => expect(screen.getByText(/null-date\.log/i)).toBeInTheDocument());
+    wrap();
+    expect(await screen.findByText(/null-date\.log/i)).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { LanguageProvider } from "../i18n";
 
@@ -23,51 +23,47 @@ const mockUsers = [
 beforeEach(() => vi.clearAllMocks());
 
 describe("UserManagementPage", () => {
-  it("shows loading state initially", async () => {
+  it("shows loading state initially", () => {
     api.fetchUsers.mockResolvedValue([]);
-    await act(async () => { wrap(<UserManagementPage />); });
-    // Component should render without crash
+    wrap(<UserManagementPage />);
     expect(document.body).toBeTruthy();
   });
 
   it("displays list of users after loading", async () => {
     api.fetchUsers.mockResolvedValue(mockUsers);
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => expect(screen.getByText(/alice@test.com/i)).toBeInTheDocument());
+    wrap(<UserManagementPage />);
+    expect(await screen.findByText(/alice@test.com/i)).toBeInTheDocument();
     expect(screen.getByText(/bob@test.com/i)).toBeInTheDocument();
   });
 
   it("shows error when fetchUsers fails", async () => {
     api.fetchUsers.mockRejectedValue(new Error("Erreur réseau"));
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => expect(screen.getByText(/Erreur réseau/i)).toBeInTheDocument());
+    wrap(<UserManagementPage />);
+    expect(await screen.findByText(/Erreur réseau/i)).toBeInTheDocument();
   });
 
   it("shows Impossible de charger when error has no message", async () => {
     api.fetchUsers.mockRejectedValue({});
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => expect(screen.getByText(/Impossible de charger/i)).toBeInTheDocument());
+    wrap(<UserManagementPage />);
+    expect(await screen.findByText(/Impossible de charger/i)).toBeInTheDocument();
   });
 
   it("renders user roles", async () => {
     api.fetchUsers.mockResolvedValue(mockUsers);
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => screen.getByText(/alice@test.com/i));
-    // "analyst" appears in multiple select <option> elements
+    wrap(<UserManagementPage />);
+    await screen.findByText(/alice@test.com/i);
     expect(screen.getAllByText(/analyst/i).length).toBeGreaterThan(0);
   });
 
   it("calls updateUserRole when role is changed", async () => {
     api.fetchUsers.mockResolvedValue(mockUsers);
     api.updateUserRole.mockResolvedValue({});
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => screen.getByText(/alice@test.com/i));
+    wrap(<UserManagementPage />);
+    await screen.findByText(/alice@test.com/i);
 
     const selects = screen.getAllByRole("combobox");
     if (selects.length > 0) {
-      await act(async () => {
-        fireEvent.change(selects[0], { target: { value: "admin" } });
-      });
+      fireEvent.change(selects[0], { target: { value: "admin" } });
       await waitFor(() => expect(api.updateUserRole).toHaveBeenCalled());
     }
   });
@@ -75,14 +71,14 @@ describe("UserManagementPage", () => {
   it("calls updateUserStatus when status toggle is clicked", async () => {
     api.fetchUsers.mockResolvedValue(mockUsers);
     api.updateUserStatus.mockResolvedValue({});
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => screen.getByText(/alice@test.com/i));
+    wrap(<UserManagementPage />);
+    await screen.findByText(/alice@test.com/i);
 
     const statusButtons = screen.getAllByRole("button").filter(
       b => /activ|désactiv|disable|enable/i.test(b.textContent)
     );
     if (statusButtons.length > 0) {
-      await act(async () => fireEvent.click(statusButtons[0]));
+      fireEvent.click(statusButtons[0]);
       await waitFor(() => expect(api.updateUserStatus).toHaveBeenCalled());
     }
   });
@@ -92,14 +88,14 @@ describe("UserManagementPage", () => {
     api.deleteUser.mockResolvedValue({});
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => screen.getByText(/alice@test.com/i));
+    wrap(<UserManagementPage />);
+    await screen.findByText(/alice@test.com/i);
 
     const deleteButtons = screen.getAllByRole("button").filter(
       b => /supprimer|delete/i.test(b.textContent)
     );
     if (deleteButtons.length > 0) {
-      await act(async () => fireEvent.click(deleteButtons[0]));
+      fireEvent.click(deleteButtons[0]);
       await waitFor(() => expect(api.deleteUser).toHaveBeenCalled());
     }
   });
@@ -108,23 +104,22 @@ describe("UserManagementPage", () => {
     api.fetchUsers.mockResolvedValue(mockUsers);
     vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    await act(async () => { wrap(<UserManagementPage />); });
-    await waitFor(() => screen.getByText(/alice@test.com/i));
+    wrap(<UserManagementPage />);
+    await screen.findByText(/alice@test.com/i);
 
     const deleteButtons = screen.getAllByRole("button").filter(
       b => /supprimer|delete/i.test(b.textContent)
     );
     if (deleteButtons.length > 0) {
-      await act(async () => fireEvent.click(deleteButtons[0]));
+      fireEvent.click(deleteButtons[0]);
       expect(api.deleteUser).not.toHaveBeenCalled();
     }
   });
 
   it("shows empty state when no users returned", async () => {
     api.fetchUsers.mockResolvedValue([]);
-    await act(async () => { wrap(<UserManagementPage />); });
+    wrap(<UserManagementPage />);
     await waitFor(() => {
-      // Should not show any user emails
       expect(screen.queryByText(/alice@test.com/i)).not.toBeInTheDocument();
     });
   });

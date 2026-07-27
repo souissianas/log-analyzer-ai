@@ -1,4 +1,4 @@
-﻿import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ErrorAnalysis from "./ErrorAnalysis";
 import { LanguageProvider } from "../i18n";
@@ -50,74 +50,32 @@ describe("ErrorAnalysis — full render", () => {
     analyzed: [makeError()],
   };
 
-  it("renders filename in title", () => {
+  it.each([
+    ["filename in title", /app\.log/i],
+    ["total errors found stat", "3"],
+    ["error message", "Connection timeout"],
+    ["error level badge", "ERROR"],
+    ["analysis explanation", "Le service est injoignable."],
+    ["causes list item", "Reseau instable"],
+    ["solutions list item", "Verifier le reseau"],
+    ["timing info", /1\.23s/i],
+    ["category name", "connection"],
+  ])("renders %s correctly", (_, textMatcher) => {
     wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText(/app\.log/i)).toBeInTheDocument();
-  });
-
-  it("renders total errors found stat", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("3")).toBeInTheDocument();
-  });
-
-  it("renders error message", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("Connection timeout")).toBeInTheDocument();
-  });
-
-  it("renders error level badge", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("ERROR")).toBeInTheDocument();
-  });
-
-  it("renders analysis explanation", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("Le service est injoignable.")).toBeInTheDocument();
-  });
-
-  it("renders causes list", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("Reseau instable")).toBeInTheDocument();
-    expect(screen.getByText("Serveur eteint")).toBeInTheDocument();
-  });
-
-  it("renders solutions list", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("Verifier le reseau")).toBeInTheDocument();
-  });
-
-  it("renders timing info", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText(/1\.23s/i)).toBeInTheDocument();
-  });
-
-  it("renders category when not unknown", () => {
-    wrap(<ErrorAnalysis data={baseData} />);
-    expect(screen.getByText("connection")).toBeInTheDocument();
+    expect(screen.getByText(textMatcher)).toBeInTheDocument();
   });
 });
 
 // ── error levels & CSS classes ────────────────────────────────────────────
 describe("ErrorAnalysis — level classes", () => {
-  it("applies critical class for CRITICAL level", () => {
-    const data = {
-      filename: "f.log",
-      analyzed: [makeError({ level: "CRITICAL" })],
-    };
+  it.each([
+    ["CRITICAL", ".level-critical"],
+    ["ERROR", ".level-error"],
+    ["WARNING", ".level-warning"],
+  ])("applies correct class for level %s", (level, selector) => {
+    const data = { filename: "f.log", analyzed: [makeError({ level })] };
     const { container } = wrap(<ErrorAnalysis data={data} />);
-    expect(container.querySelector(".level-critical")).not.toBeNull();
-  });
-
-  it("applies error class for ERROR level", () => {
-    const data = { filename: "f.log", analyzed: [makeError({ level: "ERROR" })] };
-    const { container } = wrap(<ErrorAnalysis data={data} />);
-    expect(container.querySelector(".level-error")).not.toBeNull();
-  });
-
-  it("applies warning class for WARNING level", () => {
-    const data = { filename: "f.log", analyzed: [makeError({ level: "WARNING" })] };
-    const { container } = wrap(<ErrorAnalysis data={data} />);
-    expect(container.querySelector(".level-warning")).not.toBeNull();
+    expect(container.querySelector(selector)).not.toBeNull();
   });
 });
 
