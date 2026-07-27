@@ -151,7 +151,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
             className="history-page-search"
           />
           {searchQuery && (
-            <button className="history-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+            <button type="button" className="history-search-clear" onClick={() => setSearchQuery('')}>✕</button>
           )}
         </div>
 
@@ -166,6 +166,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
 
           <div className="history-view-toggle">
             <button
+              type="button"
               className={`history-view-btn ${viewMode === 'grouped' ? 'active' : ''}`}
               onClick={() => setViewMode('grouped')}
               title={t('historyViewTooltipGrouped')}
@@ -176,6 +177,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
               </svg>
             </button>
             <button
+              type="button"
               className={`history-view-btn ${viewMode === 'flat' ? 'active' : ''}`}
               onClick={() => setViewMode('flat')}
               title={t('historyViewTooltipFlat')}
@@ -202,7 +204,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
           <div className="history-page-empty">
             <div className="history-empty-icon">🗂️</div>
             <p>{searchQuery ? t('historyNoResults') : t('historyEmptyState')}</p>
-            {searchQuery && <button className="history-clear-search-btn" onClick={() => setSearchQuery('')}>{t('historyClearSearch')}</button>}
+            {searchQuery && <button type="button" className="history-clear-search-btn" onClick={() => setSearchQuery('')}>{t('historyClearSearch')}</button>}
           </div>
         )}
 
@@ -210,6 +212,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
           <div className="history-flat-list">
             {filteredAndSorted.map(item => (
               <button
+                type="button"
                 key={item.id}
                 className={`history-flat-item ${selectedId === item.id ? 'selected' : ''}`}
                 onClick={() => handleSelect(item.id)}
@@ -244,6 +247,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
               return (
                 <div key={filename} className={`history-group-card ${isExpanded ? 'expanded' : ''}`}>
                   <button
+                    type="button"
                     className="history-group-header"
                     onClick={() => setExpandedFiles(prev => ({ ...prev, [filename]: !prev[filename] }))}
                   >
@@ -273,6 +277,7 @@ export default function HistoryPage({ onSelect, refreshKey }) {
                     <div className="history-group-runs">
                       {fileItems.map(item => (
                         <button
+                          type="button"
                           key={item.id}
                           className={`history-run-card ${selectedId === item.id ? 'selected' : ''}`}
                           onClick={() => handleSelect(item.id)}

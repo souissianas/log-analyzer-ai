@@ -74,7 +74,7 @@ export default function AccountModals({
                 </svg>
                 {t('accountTitle')}
               </h3>
-              <button className="modal-close-btn" onClick={() => setShowAccountModal(false)}>{t('modalClose')}</button>
+              <button type="button" className="modal-close-btn" onClick={() => setShowAccountModal(false)}>{t('modalClose')}</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -132,7 +132,7 @@ export default function AccountModals({
                 </svg>
                 {t('settingsTitle')}
               </h3>
-              <button className="modal-close-btn" onClick={() => setShowSettingsModal(false)}>{t('modalClose')}</button>
+              <button type="button" className="modal-close-btn" onClick={() => setShowSettingsModal(false)}>{t('modalClose')}</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -140,7 +140,7 @@ export default function AccountModals({
                   <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('settingsTheme')}</span>
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{t('settingsThemeDesc')}</span>
                 </div>
-                <button className="btn-nav-toggle" onClick={() => setDarkMode(prev => !prev)} style={{ minWidth: '100px', justifyContent: 'center' }}>
+                <button type="button" className="btn-nav-toggle" onClick={() => setDarkMode(prev => !prev)} style={{ minWidth: '100px', justifyContent: 'center' }}>
                   {darkMode ? t('settingsThemeLightBtn') : t('settingsThemeDarkBtn')}
                 </button>
               </div>
@@ -156,7 +156,7 @@ export default function AccountModals({
                   <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--error)' }}>{t('settingsData')}</span>
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{t('settingsDataDesc')}</span>
                 </div>
-                <button className="btn-logout" onClick={() => {
+                <button type="button" className="btn-logout" onClick={() => {
                   if (window.confirm(t('settingsResetConfirm'))) {
                     const theme = localStorage.getItem('theme');
                     const lastLogin = localStorage.getItem('lastLogin');

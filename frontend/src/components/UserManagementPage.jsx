@@ -87,7 +87,7 @@ export default function UserManagementPage() {
             {t('userManagementSubtitle') || 'Validez les inscriptions et gérez les rôles et permissions.'}
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={loadUsers}>
+        <button type="button" className="btn btn-secondary" onClick={loadUsers}>
           🔄 {t('refresh') || 'Actualiser'}
         </button>
       </div>
@@ -139,6 +139,7 @@ export default function UserManagementPage() {
                       {u.status === 'pending' && (
                         <>
                           <button
+                            type="button"
                             className="btn-action btn-approve"
                             onClick={() => handleStatusChange(u.id, 'active')}
                             disabled={actionLoading === u.id}
@@ -147,6 +148,7 @@ export default function UserManagementPage() {
                             ✅
                           </button>
                           <button
+                            type="button"
                             className="btn-action btn-reject"
                             onClick={() => handleStatusChange(u.id, 'rejected')}
                             disabled={actionLoading === u.id}
@@ -158,6 +160,7 @@ export default function UserManagementPage() {
                       )}
                       {u.status === 'rejected' && (
                         <button
+                          type="button"
                           className="btn-action btn-approve"
                           onClick={() => handleStatusChange(u.id, 'active')}
                           disabled={actionLoading === u.id}
@@ -168,6 +171,7 @@ export default function UserManagementPage() {
                       )}
                       {u.status === 'active' && (
                         <button
+                          type="button"
                           className="btn-action btn-reject"
                           onClick={() => handleStatusChange(u.id, 'rejected')}
                           disabled={actionLoading === u.id}
