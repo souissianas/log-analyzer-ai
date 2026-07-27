@@ -472,18 +472,18 @@ describe("App — keyboard shortcuts", () => {
   it("Escape closes modals (no crash)", async () => {
     renderApp();
     await waitFor(() => screen.getByTestId("navbar"));
-    // Should not throw
     fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("ignores shortcuts when typed in an input", async () => {
     renderApp();
     await waitFor(() => screen.getByTestId("navbar"));
-    // Simulate keyboard event from an INPUT element — should be ignored
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();
     fireEvent.keyDown(input, { key: "2", ctrlKey: true, target: input });
+    expect(screen.getByTestId("log-uploader")).toBeInTheDocument();
     document.body.removeChild(input);
   });
 
