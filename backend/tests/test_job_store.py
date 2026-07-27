@@ -16,27 +16,27 @@ from core import job_store
 @pytest.fixture(autouse=True)
 def reset_job_store_state(monkeypatch):
     monkeypatch.setattr(job_store, "_redis_client", None)
-    mock_redis_module.from_url.reset_mock()
-    mock_redis_module.from_url.side_effect = None
 
 
-def test_get_redis_success():
+def test_get_redis_success(monkeypatch):
     mock_client = MagicMock()
-    mock_redis_module.from_url.return_value = mock_client
+    mock_from_url = MagicMock(return_value=mock_client)
+    monkeypatch.setattr(mock_redis_module, "from_url", mock_from_url)
     
     client = job_store._get_redis()
     assert client == mock_client
-    mock_redis_module.from_url.assert_called_once_with(job_store.REDIS_URL, decode_responses=True)
+    mock_from_url.assert_called_once_with(job_store.REDIS_URL, decode_responses=True)
     mock_client.ping.assert_called_once()
 
     # Second call (uses cached client)
     client2 = job_store._get_redis()
     assert client2 == mock_client
-    mock_redis_module.from_url.assert_called_once()
+    mock_from_url.assert_called_once()
 
 
-def test_get_redis_failure():
-    mock_redis_module.from_url.side_effect = Exception("Redis connection refused")
+def test_get_redis_failure(monkeypatch):
+    mock_from_url = MagicMock(side_effect=Exception("Redis connection refused"))
+    monkeypatch.setattr(mock_redis_module, "from_url", mock_from_url)
     client = job_store._get_redis()
     assert client is None
 

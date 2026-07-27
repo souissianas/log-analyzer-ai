@@ -392,5 +392,6 @@ def test_runs_coroutine_with_await():
 def test_propagates_exceptions():
     async def _bad():
         raise ValueError("boom")
+    coro = _bad()
     with pytest.raises(ValueError, match="boom"):
-        w._run_async(_bad())
+        w._run_async(coro)
