@@ -181,6 +181,7 @@ export default function UserManagementPage() {
                         </button>
                       )}
                       <button
+                        type="button"
                         className="btn-action btn-delete"
                         onClick={() => handleDelete(u.id)}
                         disabled={actionLoading === u.id}
