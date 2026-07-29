@@ -83,7 +83,9 @@ async def update_user_status(
     if not target_user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    if target_user.get("tenant_id") != current_user.get("tenant_id"):
+    admin_tenant = current_user.get("tenant_id")
+    target_tenant = target_user.get("tenant_id")
+    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     success = storage.update_user_status(user_id, payload.status)
@@ -137,7 +139,9 @@ async def update_user_role(
     if not target_user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    if target_user.get("tenant_id") != current_user.get("tenant_id"):
+    admin_tenant = current_user.get("tenant_id")
+    target_tenant = target_user.get("tenant_id")
+    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     success = storage.update_user_role(user_id, payload.role)
@@ -181,7 +185,9 @@ async def delete_user(
     if not target_user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    if target_user.get("tenant_id") != current_user.get("tenant_id"):
+    admin_tenant = current_user.get("tenant_id")
+    target_tenant = target_user.get("tenant_id")
+    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     storage.delete_user(user_id)
