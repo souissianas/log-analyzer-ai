@@ -11,6 +11,9 @@ export default function AccountModals({
   t,
 }) {
   const [isEditing, setIsEditing] = useState(false)
+  // Snapshot saved when entering edit mode — restored on cancel
+  const [snapshot, setSnapshot] = useState(null)
+
   const [avatarUrl, setAvatarUrl] = useState(() => {
     return localStorage.getItem('profile_avatar') || ''
   })
@@ -102,6 +105,25 @@ export default function AccountModals({
     return Object.keys(newErrors).length === 0
   }
 
+  function handleStartEditing() {
+    // Save a snapshot so Cancel can fully restore the previous values
+    setSnapshot({ fullName, location, tagline, about })
+    setIsEditing(true)
+    setErrors({})
+  }
+
+  function handleCancelEditing() {
+    // Restore the snapshot taken when editing started
+    if (snapshot) {
+      setFullName(snapshot.fullName)
+      setLocation(snapshot.location)
+      setTagline(snapshot.tagline)
+      setAbout(snapshot.about)
+    }
+    setIsEditing(false)
+    setErrors({})
+  }
+
   function handleSaveProfile(e) {
     e.preventDefault()
     if (!validateInputs()) return
@@ -110,6 +132,7 @@ export default function AccountModals({
     localStorage.setItem('profile_location', location.trim())
     localStorage.setItem('profile_tagline', tagline.trim())
     localStorage.setItem('profile_about', about.trim())
+    setSnapshot(null)
     setIsEditing(false)
   }
 
@@ -338,6 +361,8 @@ export default function AccountModals({
                   <input
                     id="profile-location"
                     type="text"
+                    list="country-list"
+                    placeholder="Choisir un pays ou taper une ville..."
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     style={{
@@ -350,6 +375,32 @@ export default function AccountModals({
                       fontSize: '0.9rem'
                     }}
                   />
+                  <datalist id="country-list">
+                    <option value="Tunis, Tunisie" />
+                    <option value="Sousse, Tunisie" />
+                    <option value="Sfax, Tunisie" />
+                    <option value="Paris, France" />
+                    <option value="Lyon, France" />
+                    <option value="Marseille, France" />
+                    <option value="Alger, Algérie" />
+                    <option value="Casablanca, Maroc" />
+                    <option value="Rabat, Maroc" />
+                    <option value="Bruxelles, Belgique" />
+                    <option value="Genève, Suisse" />
+                    <option value="Montréal, Canada" />
+                    <option value="Québec, Canada" />
+                    <option value="New York, États-Unis" />
+                    <option value="Londres, Royaume-Uni" />
+                    <option value="Berlin, Allemagne" />
+                    <option value="Madrid, Espagne" />
+                    <option value="Rome, Italie" />
+                    <option value="Le Caire, Égypte" />
+                    <option value="Dakar, Sénégal" />
+                    <option value="Abidjan, Côte d'Ivoire" />
+                    <option value="Douala, Cameroun" />
+                    <option value="Dubaï, Émirats Arabes Unis" />
+                    <option value="Riyad, Arabie Saoudite" />
+                  </datalist>
                   {errors.location && (
                     <span style={{ color: 'var(--error)', fontSize: '0.78rem', marginTop: '2px', display: 'block' }}>
                       {errors.location}
@@ -417,13 +468,10 @@ export default function AccountModals({
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditing(false)
-                      setErrors({})
-                    }}
+                    onClick={handleCancelEditing}
                     style={{ flex: 1, padding: '10px', background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--surface-3)', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
                   >
-                    {t('profileCancelBtn') || 'Annuler'}
+                    Annuler
                   </button>
                 </div>
               </form>
@@ -474,7 +522,7 @@ export default function AccountModals({
                   <div style={{ marginTop: '8px' }}>
                     <button
                       type="button"
-                      onClick={() => setIsEditing(true)}
+                      onClick={handleStartEditing}
                       style={{
                         background: 'var(--surface-2)',
                         border: '1px solid var(--surface-3)',
