@@ -161,12 +161,12 @@ export default function UserManagementPage() {
                       {u.status === 'rejected' && (
                         <button
                           type="button"
-                          className="btn-action btn-approve"
+                          className="btn-action btn-approve btn-reactivate"
                           onClick={() => handleStatusChange(u.id, 'active')}
                           disabled={actionLoading === u.id}
-                          title={t('approve') || 'Approuver'}
+                          title={t('approve') || 'Réactiver'}
                         >
-                          ✅ Reactiver
+                          ✅ {t('reactivate') || 'Réactiver'}
                         </button>
                       )}
                       {u.status === 'active' && (
