@@ -72,7 +72,7 @@ const translations = {
     loginOrgError: 'Le nom et le slug de l\'organisation sont obligatoires.',
 
     // Log Uploader
-    uploaderTitle: 'Uploader un fichier log',
+    uploaderTitle: 'Télécharger un fichier log',
     uploaderDropText: 'Déposer un fichier .log ou .txt',
     uploaderClickText: 'ou cliquer pour sélectionner un fichier',
     uploaderReadyText: '{name} prêt pour l\'analyse',
@@ -83,7 +83,7 @@ const translations = {
     uploaderBtnLoading: 'Analyse en cours...',
     uploaderBtnAnalyze: 'Analyser avec IA',
     uploaderRoleViewerLabel: 'Lecture seule (Rôle Lecteur)',
-    uploaderHint: 'Le backend détectera les lignes ERROR, WARNING, FATAL et EXCEPTION.',
+    uploaderHint: '',
     uploaderRoleError: 'Rôle Lecteur : Vous n\'avez pas l\'autorisation d\'uploader des logs.',
     uploaderFormatError: 'Format non supporté. Choisis un fichier .log ou .txt.',
 

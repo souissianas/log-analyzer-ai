@@ -170,7 +170,7 @@ export default function LogUploader({ onAnalyze, disabled, role }) {
         </button>
       </form>
 
-      {file && <p className="file-hint">{t('uploaderHint')}</p>}
+
     </section>
   )
 }
