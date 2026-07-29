@@ -85,7 +85,7 @@ async def update_user_status(
 
     admin_tenant = current_user.get("tenant_id")
     target_tenant = target_user.get("tenant_id")
-    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
+    if admin_tenant is not None and target_tenant is not None and str(admin_tenant) != str(target_tenant):
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     success = storage.update_user_status(user_id, payload.status)
@@ -141,7 +141,7 @@ async def update_user_role(
 
     admin_tenant = current_user.get("tenant_id")
     target_tenant = target_user.get("tenant_id")
-    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
+    if admin_tenant is not None and target_tenant is not None and str(admin_tenant) != str(target_tenant):
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     success = storage.update_user_role(user_id, payload.role)
@@ -187,7 +187,7 @@ async def delete_user(
 
     admin_tenant = current_user.get("tenant_id")
     target_tenant = target_user.get("tenant_id")
-    if admin_tenant is not None and target_tenant is not None and admin_tenant != target_tenant:
+    if admin_tenant is not None and target_tenant is not None and str(admin_tenant) != str(target_tenant):
         raise HTTPException(status_code=403, detail=TENANT_ACCESS_DENIED)
 
     storage.delete_user(user_id)
