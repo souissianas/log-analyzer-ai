@@ -38,6 +38,28 @@ function persistProfileData({ fullName, location, tagline, about }) {
   return { safeFullName, safeLocation, safeTagline, safeAbout }
 }
 
+const POPULAR_CITIES = [
+  { name: 'Tunis, Tunisie', flag: '🇹🇳', lat: 36.8065, lon: 10.1815 },
+  { name: 'Sousse, Tunisie', flag: '🇹🇳', lat: 35.8256, lon: 10.6084 },
+  { name: 'Sfax, Tunisie', flag: '🇹🇳', lat: 34.7406, lon: 10.7603 },
+  { name: 'Paris, France', flag: '🇫🇷', lat: 48.8566, lon: 2.3522 },
+  { name: 'Lyon, France', flag: '🇫🇷', lat: 45.7640, lon: 4.8357 },
+  { name: 'Marseille, France', flag: '🇫🇷', lat: 43.2965, lon: 5.3698 },
+  { name: 'Casablanca, Maroc', flag: '🇲🇦', lat: 33.5731, lon: -7.5898 },
+  { name: 'Rabat, Maroc', flag: '🇲🇦', lat: 34.0209, lon: -6.8416 },
+  { name: 'Alger, Algérie', flag: '🇩🇿', lat: 36.7538, lon: 3.0588 },
+  { name: 'Bruxelles, Belgique', flag: '🇧🇪', lat: 50.8503, lon: 4.3517 },
+  { name: 'Genève, Suisse', flag: '🇨🇭', lat: 46.2044, lon: 6.1432 },
+  { name: 'Montréal, Canada', flag: '🇨🇦', lat: 45.5017, lon: -73.5673 },
+  { name: 'Londres, Royaume-Uni', flag: '🇬🇧', lat: 51.5074, lon: -0.1278 },
+  { name: 'New York, États-Unis', flag: '🇺🇸', lat: 40.7128, lon: -74.0060 },
+  { name: 'Berlin, Allemagne', flag: '🇩🇪', lat: 52.5200, lon: 13.4050 },
+  { name: 'Madrid, Espagne', flag: '🇪🇸', lat: 40.4168, lon: -3.7038 },
+  { name: 'Rome, Italie', flag: '🇮🇹', lat: 41.9028, lon: 12.4964 },
+  { name: 'Dubaï, Émirats Arabes Unis', flag: '🇦🇪', lat: 25.2048, lon: 55.2708 },
+  { name: 'Tokyo, Japon', flag: '🇯🇵', lat: 35.6762, lon: 139.6503 },
+]
+
 export default function AccountModals({
   showAccountModal,
   setShowAccountModal,
@@ -68,9 +90,42 @@ export default function AccountModals({
     return localStorage.getItem('profile_about') || (t('profileAboutText') || 'Analyste passionné par le traitement automatique de logs et le diagnostic système assisté par IA.')
   })
 
+  // Map & City Picker States
+  const [showMapModal, setShowMapModal] = useState(false)
+  const [selectedCoords, setSelectedCoords] = useState({ lat: 36.8065, lon: 10.1815 })
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [tempLocation, setTempLocation] = useState(location)
+
   // Validation errors state
   const [errors, setErrors] = useState({})
   const [avatarError, setAvatarError] = useState('')
+
+  // OpenStreetMap Nominatim Search Effect
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.length < 2) {
+      setSearchResults([])
+      return undefined
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(searchQuery)}&accept-language=fr&limit=6`
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setSearchResults(data)
+        }
+      } catch (err) {
+        console.error('Erreur recherche ville:', err)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   useEffect(() => {
     if (!showAccountModal && !showSettingsModal) return undefined
@@ -400,49 +455,52 @@ export default function AccountModals({
                   <label htmlFor="profile-location" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text)' }}>
                     {t('profileLocationLabel') || 'Emplacement :'}
                   </label>
-                  <input
-                    id="profile-location"
-                    type="text"
-                    list="country-list"
-                    placeholder="Choisir un pays ou taper une ville..."
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: errors.location ? '1px solid var(--error)' : '1px solid var(--surface-3)',
-                      background: 'var(--surface-2)',
-                      color: 'var(--text)',
-                      fontSize: '0.9rem'
-                    }}
-                  />
-                  <datalist id="country-list">
-                    <option value="Tunis, Tunisie" />
-                    <option value="Sousse, Tunisie" />
-                    <option value="Sfax, Tunisie" />
-                    <option value="Paris, France" />
-                    <option value="Lyon, France" />
-                    <option value="Marseille, France" />
-                    <option value="Alger, Algérie" />
-                    <option value="Casablanca, Maroc" />
-                    <option value="Rabat, Maroc" />
-                    <option value="Bruxelles, Belgique" />
-                    <option value="Genève, Suisse" />
-                    <option value="Montréal, Canada" />
-                    <option value="Québec, Canada" />
-                    <option value="New York, États-Unis" />
-                    <option value="Londres, Royaume-Uni" />
-                    <option value="Berlin, Allemagne" />
-                    <option value="Madrid, Espagne" />
-                    <option value="Rome, Italie" />
-                    <option value="Le Caire, Égypte" />
-                    <option value="Dakar, Sénégal" />
-                    <option value="Abidjan, Côte d'Ivoire" />
-                    <option value="Douala, Cameroun" />
-                    <option value="Dubaï, Émirats Arabes Unis" />
-                    <option value="Riyad, Arabie Saoudite" />
-                  </datalist>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      id="profile-location"
+                      type="text"
+                      readOnly
+                      placeholder="Sélectionner une ville via la carte..."
+                      value={location}
+                      onClick={() => {
+                        setTempLocation(location)
+                        setShowMapModal(true)
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: errors.location ? '1px solid var(--error)' : '1px solid var(--surface-3)',
+                        background: 'var(--surface-2)',
+                        color: 'var(--text)',
+                        fontSize: '0.9rem',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setTempLocation(location)
+                        setShowMapModal(true)
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      🗺️ Carte / Ville
+                    </button>
+                  </div>
+                  <small style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    🔒 Saisie manuelle restreinte : veuillez sélectionner une ville officielle sur la carte.
+                  </small>
                   {errors.location && (
                     <span style={{ color: 'var(--error)', fontSize: '0.78rem', marginTop: '2px', display: 'block' }}>
                       {errors.location}
@@ -761,6 +819,219 @@ export default function AccountModals({
           </dialog>
         </div>
       )}
+
+      {/* ── World Map & City Picker Modal ───────────────────────────────────── */}
+      {showMapModal && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <button
+            type="button"
+            className="modal-overlay-backdrop"
+            aria-label={t('modalClose')}
+            onClick={() => setShowMapModal(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              margin: 0,
+              padding: 0,
+              background: 'transparent',
+              cursor: 'default',
+            }}
+          />
+          <dialog
+            className="shortcuts-modal"
+            open
+            style={{
+              minWidth: '480px',
+              maxWidth: '640px',
+              width: '92%',
+              position: 'relative',
+              zIndex: 1,
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px 28px'
+            }}
+          >
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={() => setShowMapModal(false)}
+              style={{ position: 'absolute', right: '18px', top: '18px' }}
+            >
+              {t('modalClose')}
+            </button>
+
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '1.4rem', fontWeight: 800, color: 'var(--text)' }}>
+                🗺️ Sélectionner une Ville dans le Monde
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Recherchez n'importe quelle ville ou choisissez une suggestion ci-dessous.
+              </p>
+            </div>
+
+            {/* Worldwide City Search Input */}
+            <div style={{ position: 'relative', marginBottom: '16px' }}>
+              <input
+                type="text"
+                placeholder="🔍 Rechercher une ville dans le monde (ex: Tunis, Paris, Tokyo, Casablanca...)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '2px solid var(--primary)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text)',
+                  fontSize: '0.92rem',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
+                }}
+              />
+
+              {isSearching && (
+                <span style={{ position: 'absolute', right: '12px', top: '10px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                  Recherche...
+                </span>
+              )}
+
+              {/* Dynamic Nominatim Search Results */}
+              {searchResults.length > 0 && (
+                <ul
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: 'var(--surface)',
+                    border: '1px solid var(--surface-3)',
+                    borderRadius: '10px',
+                    marginTop: '4px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    zIndex: 20,
+                    listStyle: 'none',
+                    padding: '6px 0',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  {searchResults.map((item, idx) => {
+                    const displayName = item.display_name
+                    const parts = displayName.split(',')
+                    const mainName = parts[0]
+                    const country = parts[parts.length - 1]
+                    const formatted = `${mainName.trim()}, ${country.trim()}`
+                    return (
+                      <li
+                        key={idx}
+                        onClick={() => {
+                          setTempLocation(formatted)
+                          if (item.lat && item.lon) {
+                            setSelectedCoords({ lat: parseFloat(item.lat), lon: parseFloat(item.lon) })
+                          }
+                          setSearchQuery('')
+                          setSearchResults([])
+                        }}
+                        style={{
+                          padding: '10px 16px',
+                          cursor: 'pointer',
+                          fontSize: '0.88rem',
+                          borderBottom: idx < searchResults.length - 1 ? '1px solid var(--surface-2)' : 'none',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        📍 <strong>{formatted}</strong>
+                        <br />
+                        <small style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{displayName}</small>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Currently Selected Location Banner */}
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px'
+              }}
+            >
+              <span style={{ fontSize: '0.9rem', color: 'var(--text)', fontWeight: 600 }}>
+                📍 Emplacement choisi : <strong>{tempLocation}</strong>
+              </span>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setLocation(tempLocation)
+                  setShowMapModal(false)
+                }}
+                style={{ padding: '6px 14px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+              >
+                ✅ Confirmer
+              </button>
+            </div>
+
+            {/* Popular Cities Quick Pills */}
+            <div style={{ marginBottom: '16px' }}>
+              <span style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--muted)', marginBottom: '8px' }}>
+                VILLES RECOMMANDÉES :
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '100px', overflowY: 'auto' }}>
+                {POPULAR_CITIES.map((c, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setTempLocation(c.name)
+                      setSelectedCoords({ lat: c.lat, lon: c.lon })
+                    }}
+                    style={{
+                      background: tempLocation === c.name ? 'var(--primary)' : 'var(--surface-2)',
+                      color: tempLocation === c.name ? '#ffffff' : 'var(--text)',
+                      border: '1px solid var(--surface-3)',
+                      padding: '4px 10px',
+                      borderRadius: '16px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      fontWeight: tempLocation === c.name ? 700 : 500,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {c.flag} {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Embedded OpenStreetMap Preview */}
+            <div style={{ width: '100%', height: '200px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--surface-3)' }}>
+              <iframe
+                title="Carte OpenStreetMap"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                scrolling="no"
+                marginHeight="0"
+                marginWidth="0"
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${selectedCoords.lon - 0.08}%2C${selectedCoords.lat - 0.08}%2C${selectedCoords.lon + 0.08}%2C${selectedCoords.lat + 0.08}&layer=mapnik&marker=${selectedCoords.lat}%2C${selectedCoords.lon}`}
+              />
+            </div>
+          </dialog>
+        </div>
+      )}
     </>
-  );
+  )
 }
