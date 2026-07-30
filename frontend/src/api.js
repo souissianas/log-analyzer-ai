@@ -79,6 +79,9 @@ function persistSession(data) {
   if (typeof data.access_token === 'string' && data.access_token) {
     localStorage.setItem('token', data.access_token)
   }
+  if (typeof data.refresh_token === 'string' && data.refresh_token) {
+    localStorage.setItem('refresh_token', data.refresh_token)
+  }
   persistIdentity(data)
 }
 
@@ -131,8 +134,27 @@ export async function register(email, password, tenantName, tenantSlug, role = '
 
 export function logout() {
   localStorage.removeItem('token')
+  localStorage.removeItem('refresh_token')
   localStorage.removeItem('role')
   localStorage.removeItem('email')
+}
+
+export async function refreshToken() {
+  const refreshTok = localStorage.getItem('refresh_token')
+  if (!refreshTok) throw new Error('Aucun token de rafraîchissement disponible')
+
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshTok }),
+  })
+  if (!res.ok) {
+    logout()
+    throw new Error('401 Session expirée, veuillez vous reconnecter')
+  }
+  const data = await res.json()
+  persistSession(data)
+  return data
 }
 
 export async function forgotPassword(email) {
@@ -176,7 +198,7 @@ export async function fetchCurrentUser() {
     headers: buildHeaders()
   })
   if (!res.ok) {
-    throw new Error('Impossible de récupérer les informations de l\'utilisateur')
+    throw new Error(`401 Impossible de récupérer les informations de l'utilisateur (${res.status})`)
   }
   return res.json()
 }
@@ -189,9 +211,26 @@ export async function fetchCurrentUser() {
  * written to browser storage outside of this file.
  */
 export async function syncCurrentUser() {
-  const freshUser = await fetchCurrentUser()
-  persistIdentity(freshUser)
-  return freshUser
+  try {
+    const freshUser = await fetchCurrentUser()
+    persistIdentity(freshUser)
+    return freshUser
+  } catch (err) {
+    const hasRefreshToken = Boolean(localStorage.getItem('refresh_token'))
+    if (hasRefreshToken) {
+      try {
+        const refreshed = await refreshToken()
+        const freshUser = await fetchCurrentUser()
+        persistIdentity(freshUser)
+        return { ...freshUser, token: refreshed.access_token }
+      } catch (refreshErr) {
+        logout()
+        throw refreshErr
+      }
+    }
+    logout()
+    throw err
+  }
 }
 
 export async function fetchUsers() {

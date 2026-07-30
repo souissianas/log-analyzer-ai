@@ -18,7 +18,7 @@ from fastapi import Depends, HTTPException, Query, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from core.config import get_settings
-from core.jwt import decode_token
+from core.jwt import decode_token, decode_token_full
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +35,34 @@ def get_current_user_or_api_key(
 ) -> dict:
     settings = get_settings()
 
-    # ── FIX 1 : court-circuit si l'auth est désactivée ────────────────────
-    # Sans ça, le code tombait toujours sur le 401 final quand auth_enabled=False
-    # car ni le bloc API Key ni le bloc JWT ne passaient.
-    if not settings.auth_enabled:
-        return {
-            "sub": "anonymous",
-            "user_id": None,
-            "tenant_id": None,
-            "role": "admin",
-        }
+    # ── 1. Vérification JWT Bearer ─────────────────────────────────────────
+    if credentials:
+        token = credentials.credentials
+        payload, error = decode_token_full(token)
+        if payload is not None:
+            logger.info(
+                "JWT authentication successful",
+                extra={"event": "auth_jwt_ok", "sub": payload.get("sub")},
+            )
+            return payload
+        elif error == "expired":
+            logger.warning("Expired JWT token presented", extra={"event": "auth_jwt_expired"})
+            raise HTTPException(
+                status_code=401,
+                detail="Token JWT expiré",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        else:
+            logger.warning("Invalid JWT token presented", extra={"event": "auth_jwt_invalid"})
+            raise HTTPException(
+                status_code=401,
+                detail="Token JWT invalide",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    # ── 1. Vérification API Key ────────────────────────────────────────────
+    # ── 2. Vérification API Key ────────────────────────────────────────────
     provided_api_key = api_key or api_key_query
     if provided_api_key and settings.api_key:
-        # FIX 2 : compare_digest() empêche les timing attacks
-        # (comparaison en temps constant, indépendant de la longueur commune)
         if hmac.compare_digest(provided_api_key, settings.api_key):
             logger.info(
                 "API key authentication successful",
@@ -68,21 +80,14 @@ def get_current_user_or_api_key(
                 extra={"event": "auth_api_key_fail"},
             )
 
-    # ── 2. Vérification JWT Bearer ─────────────────────────────────────────
-    if credentials:
-        token = credentials.credentials
-        payload = decode_token(token)
-        if payload is not None:
-            logger.info(
-                "JWT authentication successful",
-                extra={"event": "auth_jwt_ok", "sub": payload.get("sub")},
-            )
-            return payload
-        else:
-            logger.warning(
-                "Invalid or expired JWT token",
-                extra={"event": "auth_jwt_fail"},
-            )
+    # ── 3. Court-circuit si l'auth est désactivée (mode dev sans clé API ni token) ─
+    if not settings.auth_enabled:
+        return {
+            "sub": "anonymous",
+            "user_id": None,
+            "tenant_id": None,
+            "role": "admin",
+        }
 
     raise HTTPException(
         status_code=401,

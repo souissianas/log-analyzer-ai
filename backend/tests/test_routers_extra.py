@@ -178,11 +178,9 @@ def test_get_analysis_found_returns_200(client):
         assert r.status_code == 200
 
 
-def test_export_pdf_viewer_allowed(monkeypatch):
-    monkeypatch.setenv("API_KEY", "test-key")
-    get_settings.cache_clear()
-    c = TestClient(app)
-    r = c.post("/logs/1/export", headers=_headers("viewer"))
+def test_export_pdf_viewer_allowed(client):
+    with patch("routers.logs.storage.get_analysis", return_value=None):
+        r = client.post("/logs/1/export", headers=_headers("viewer"))
     assert r.status_code == 404
 
 
