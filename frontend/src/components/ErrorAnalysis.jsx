@@ -98,7 +98,7 @@ export default function ErrorAnalysis({ data, onExportPdf, role }) {
           <h2>{t('analysisResultTitle', { name: data.filename })}</h2>
           <p className="results-summary">{t('analysisResultDesc')}</p>
         </div>
-        {data.log_id && onExportPdf && role !== 'viewer' && (
+        {data.log_id && onExportPdf && (
           <button type="button" className="btn-secondary" onClick={() => onExportPdf(data.log_id)}>
             {t('analysisBtnExport')}
           </button>

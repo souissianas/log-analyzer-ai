@@ -49,7 +49,7 @@ const translations = {
     profileSaveBtn: '💾 Enregistrer',
     roleDescAdmin: 'Accès Administrateur : Vous possédez tous les droits d\'administration, y compris l\'analyse de logs, l\'export PDF, la réanalyse et la suppression des entrées d\'historique.',
     roleDescAnalyst: 'Accès Analyste : Vous pouvez téléverser des fichiers de logs pour analyse, réanalyser les logs existants et exporter les rapports au format PDF.',
-    roleDescViewer: 'Accès Lecteur : Vous avez des permissions de lecture seule. Vous pouvez consulter l\'historique et les détails des analyses existantes.',
+    roleDescViewer: 'Accès Lecteur : Vous avez des permissions de lecture. Vous pouvez consulter l\'historique, les détails des analyses et exporter au format PDF.',
 
     settingsTitle: 'Paramètres',
     settingsTheme: 'Thème d\'affichage',
@@ -221,7 +221,7 @@ const translations = {
     profileSaveBtn: '💾 Save',
     roleDescAdmin: 'Admin Access: You possess all administrative rights, including log analysis, PDF export, re-analysis, and history deletion.',
     roleDescAnalyst: 'Analyst Access: You can upload log files for analysis, re-analyze existing logs, and export PDF reports.',
-    roleDescViewer: 'Viewer Access: You have read-only permissions. You can view the history list and details of existing analyses.',
+    roleDescViewer: 'Viewer Access: You have read permissions. You can view the history list, details of existing analyses, and export PDF reports.',
 
     settingsTitle: 'Settings',
     settingsTheme: 'Theme Mode',

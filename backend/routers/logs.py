@@ -67,7 +67,7 @@ def get_saved_analysis(log_id: int, current_user: CurrentUser):
     },
 )
 def export_analysis_pdf(log_id: int, current_user: CurrentUser):
-    if current_user.get("role") not in ("admin", "analyst"):
+    if current_user.get("role") not in ("admin", "analyst", "viewer"):
         raise HTTPException(status_code=403, detail="Droit insuffisant pour exporter les analyses")
 
     tenant_id = current_user.get("tenant_id")

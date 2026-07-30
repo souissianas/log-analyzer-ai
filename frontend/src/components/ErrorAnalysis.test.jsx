@@ -113,10 +113,10 @@ describe("ErrorAnalysis — export PDF button", () => {
     expect(onExportPdf).toHaveBeenCalledWith(7);
   });
 
-  it("hides export button for viewer role", () => {
+  it("shows export button for viewer role", () => {
     const onExportPdf = vi.fn();
     wrap(<ErrorAnalysis data={dataWithLogId} onExportPdf={onExportPdf} role="viewer" />);
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("button")).toBeInTheDocument();
   });
 
   it("hides export button when no log_id", () => {

@@ -178,12 +178,12 @@ def test_get_analysis_found_returns_200(client):
         assert r.status_code == 200
 
 
-def test_export_pdf_viewer_returns_403(monkeypatch):
+def test_export_pdf_viewer_allowed(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-key")
     get_settings.cache_clear()
     c = TestClient(app)
     r = c.post("/logs/1/export", headers=_headers("viewer"))
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_export_pdf_analyst_not_found_returns_404(client):
