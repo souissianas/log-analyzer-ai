@@ -1,5 +1,43 @@
 import { useEffect, useState } from 'react'
 
+/**
+ * Sanitizes profile text inputs before persisting to browser storage.
+ * Neutralizes potential XSS/tainted strings by stripping control characters and HTML tags,
+ * and bounding max length to satisfy SonarCloud security rule S5689.
+ */
+export function sanitizeProfileText(input, maxLength = 100) {
+  if (typeof input !== 'string') return ''
+  const clean = input.replace(/[<>\r\n]/g, ' ').replace(/\s+/g, ' ').trim()
+  return clean.slice(0, maxLength)
+}
+
+/**
+ * Sanitizes multi-line profile bio text before persisting to browser storage (SonarCloud S5689).
+ */
+export function sanitizeProfileBio(input, maxLength = 500) {
+  if (typeof input !== 'string') return ''
+  const clean = input.replace(/[<>]/g, '').trim()
+  return clean.slice(0, maxLength)
+}
+
+/**
+ * Single choke point for persisting user profile data to browser storage.
+ * Ensures all untrusted input fields are neutralized and sanitized prior to calling localStorage.setItem.
+ */
+function persistProfileData({ fullName, location, tagline, about }) {
+  const safeFullName = sanitizeProfileText(fullName, 60)
+  const safeLocation = sanitizeProfileText(location, 60)
+  const safeTagline  = sanitizeProfileText(tagline, 100)
+  const safeAbout    = sanitizeProfileBio(about, 500)
+
+  if (safeFullName) localStorage.setItem('profile_fullname', safeFullName)
+  if (safeLocation) localStorage.setItem('profile_location', safeLocation)
+  if (safeTagline)  localStorage.setItem('profile_tagline', safeTagline)
+  if (safeAbout)    localStorage.setItem('profile_about', safeAbout)
+
+  return { safeFullName, safeLocation, safeTagline, safeAbout }
+}
+
 export default function AccountModals({
   showAccountModal,
   setShowAccountModal,
@@ -67,8 +105,10 @@ export default function AccountModals({
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result
-      setAvatarUrl(result)
-      localStorage.setItem('profile_avatar', result)
+      if (typeof result === 'string' && result.startsWith('data:image/')) {
+        setAvatarUrl(result)
+        localStorage.setItem('profile_avatar', result)
+      }
     }
     reader.readAsDataURL(file)
   }
@@ -128,10 +168,12 @@ export default function AccountModals({
     e.preventDefault()
     if (!validateInputs()) return
 
-    localStorage.setItem('profile_fullname', fullName.trim())
-    localStorage.setItem('profile_location', location.trim())
-    localStorage.setItem('profile_tagline', tagline.trim())
-    localStorage.setItem('profile_about', about.trim())
+    const safeData = persistProfileData({ fullName, location, tagline, about })
+    setFullName(safeData.safeFullName)
+    setLocation(safeData.safeLocation)
+    setTagline(safeData.safeTagline)
+    setAbout(safeData.safeAbout)
+
     setSnapshot(null)
     setIsEditing(false)
   }
