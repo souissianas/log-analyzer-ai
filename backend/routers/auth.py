@@ -233,13 +233,13 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user_or
     """Retourne les informations de l'utilisateur connecté."""
     user_id = current_user.get("user_id")
     if not user_id:
-        return {
-            "user_id": 0,
-            "email": "system",
-            "role": current_user.get("role", "admin"),
-            "status": "active",
-            "tenant_id": current_user.get("tenant_id"),
-        }
+        # No valid user_id means anonymous/api-key session without a real user account.
+        # Return 401 so the frontend knows to re-authenticate properly.
+        raise HTTPException(
+            status_code=401,
+            detail="Session non authentifiée : veuillez vous connecter avec votre compte.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
