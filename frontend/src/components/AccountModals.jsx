@@ -1,23 +1,31 @@
 import { useEffect, useState } from 'react'
 
+// SonarCloud's taint engine (S5689) only recognizes a bounded RegExp#test()
+// gate that returns the ORIGINAL input as a sanitizer — a value rebuilt from
+// replace()/slice() calls (as this file used to do) still counts as tainted,
+// same reasoning as sanitizeEmail/sanitizeToken in api.js. Each regex below
+// uses a single bounded quantifier (no nested/overlapping quantifiers), so
+// there's no unbounded backtracking risk (S5852).
+
 /**
- * Sanitizes profile text inputs before persisting to browser storage.
- * Neutralizes potential XSS/tainted strings by stripping control characters and HTML tags,
- * and bounding max length to satisfy SonarCloud security rule S5689.
+ * Single-line profile text (name, location, tagline): reject anything
+ * containing angle brackets or control characters, and anything longer than
+ * maxLength, instead of transforming the input.
  */
 export function sanitizeProfileText(input, maxLength = 100) {
   if (typeof input !== 'string') return ''
-  const clean = input.replace(/[<>\r\n]/g, ' ').replace(/\s+/g, ' ').trim()
-  return clean.slice(0, maxLength)
+  const re = new RegExp(`^[^<>\\x00-\\x1F\\x7F]{0,${maxLength}}$`)
+  return re.test(input) ? input : ''
 }
 
 /**
- * Sanitizes multi-line profile bio text before persisting to browser storage (SonarCloud S5689).
+ * Multi-line profile bio: same rule as sanitizeProfileText but newlines
+ * (\x0A) are allowed since a bio can span multiple lines.
  */
 export function sanitizeProfileBio(input, maxLength = 500) {
   if (typeof input !== 'string') return ''
-  const clean = input.replace(/[<>]/g, '').trim()
-  return clean.slice(0, maxLength)
+  const re = new RegExp(`^[^<>\\x00-\\x09\\x0B-\\x1F\\x7F]{0,${maxLength}}$`)
+  return re.test(input) ? input : ''
 }
 
 /**
