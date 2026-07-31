@@ -48,18 +48,6 @@ export function sanitizeEmail(email) {
   return EMAIL_RE.test(email) ? email : null
 }
 
-// Same reasoning as sanitizeEmail above: a bounded RegExp#test() gate that
-// returns the untouched input only if it matches is the sanitizer shape
-// SonarCloud's taint engine recognizes for S5689 (tainted data written to
-// browser storage). JWTs are 3 dot-separated base64url segments; every
-// quantifier is length-bounded so there is no ReDoS risk (S5852).
-const TOKEN_RE = /^[A-Za-z0-9_-]{1,2000}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{0,1000}$/
-
-export function sanitizeToken(token) {
-  if (typeof token !== 'string' || token.length > 8000) return null
-  return TOKEN_RE.test(token) ? token : null
-}
-
 // Single choke point for writing identity fields to localStorage. Every
 // caller — login, register, and the periodic refresh in syncCurrentUser —
 // goes through here, so the sanitize-then-store flow lives in one place
@@ -88,16 +76,12 @@ function persistIdentity({ role, email } = {}) {
 }
 
 function persistSession(data) {
-  const safeAccessToken = sanitizeToken(data.access_token)
-  if (safeAccessToken) {
-    localStorage.setItem('token', safeAccessToken)
+  if (typeof data.access_token === 'string' && data.access_token) {
+    localStorage.setItem('token', data.access_token)
   }
-
-  const safeRefreshToken = sanitizeToken(data.refresh_token)
-  if (safeRefreshToken) {
-    localStorage.setItem('refresh_token', safeRefreshToken)
+  if (typeof data.refresh_token === 'string' && data.refresh_token) {
+    localStorage.setItem('refresh_token', data.refresh_token)
   }
-
   persistIdentity(data)
 }
 
